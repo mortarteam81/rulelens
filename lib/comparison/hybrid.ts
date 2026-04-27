@@ -28,6 +28,18 @@ export function buildHybridComparisonTable(
   if (baselineRows.length === 0) warnings.push('성신 URL에서 기준 현행 조문을 만들 수 없습니다.');
   if (proposedRows.length === 0) warnings.push('업로드 파일에서 개정안 조문을 만들 수 없습니다.');
 
+  if (proposedRows.length === 0) {
+    return {
+      regulationName: currentSource.regulationName ?? proposedSource.regulationName,
+      sourceKind: 'hybrid',
+      sourceFormat: proposedSource.sourceFormat,
+      previousHistory: currentSource.currentHistory,
+      currentHistory: '업로드 개정안',
+      rows: [],
+      warnings,
+    };
+  }
+
   const baseline = baselineRows.map(indexRow);
   const proposed = proposedRows.map(indexRow);
   const matchedBaseline = new Set<number>();
