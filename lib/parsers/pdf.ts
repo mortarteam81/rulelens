@@ -195,13 +195,15 @@ async function runExtractor(scriptPath: string, pdfPath: string): Promise<PdfExt
 
 function parseComparisonRowsFromExtractedText(pages: ExtractedPdfPage[], tableWarnings: string[]): ParsedComparisonRow[] {
   const text = joinPages(pages);
-  const koreanRows = parseKoreanComparisonBlocks(text);
-  const rows = koreanRows.length
-    ? koreanRows
+  const agendaRows = parseKoreanComparisonAgendaBlocks(text);
+  const koreanRows = agendaRows.length ? agendaRows : parseKoreanComparisonBlocks(text);
+  const fallbackRows = /신\s*[․·ㆍ･]?\s*구\s*조문\s*대비표/u.test(text)
+    ? []
     : [
         ...parseLabelledBlocks(text),
         ...parseWhitespaceTableRows(text),
       ];
+  const rows = koreanRows.length ? koreanRows : fallbackRows;
 
   const deduped = new Map<string, ParsedComparisonRow>();
   for (const row of rows) {
@@ -214,6 +216,53 @@ function parseComparisonRowsFromExtractedText(pages: ExtractedPdfPage[], tableWa
   }
 
   return [...deduped.values()].map((row, index) => ({ ...row, id: `pdf-${index + 1}` }));
+}
+
+function parseComparisonAgendaBlocks(text: string): string[] {
+  const normalized = text.replace(/\t/g, ' ');
+  const agendaStart = /(?:^|\n)(?:-\s*\d+\s*-\s*\n)?\s*\d+\.\s+[^\n]+(?:규정|정관|세칙)\s+개정\(안\)/gu;
+  const matches = [...normalized.matchAll(agendaStart)].filter((match) => /신\s*[․·ㆍ･]?\s*구\s*조문\s*대비표/u.test(normalized.slice(match.index ?? 0, (match.index ?? 0) + 6000)));
+  if (!matches.length) return [];
+
+  return matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? normalized.length;
+    return normalized.slice(start, end);
+  });
+}
+
+function parseKoreanComparisonAgendaBlocks(text: string): ParsedComparisonRow[] {
+  const sections = parseComparisonAgendaBlocks(text);
+  const rows: ParsedComparisonRow[] = [];
+
+  sections.forEach((section, index) => {
+    const title = cleanText(section.match(/\d+\.\s+([^\n]+?(?:규정|정관|세칙)\s+개정\(안\))/u)?.[1] ?? `PDF 안건 ${index + 1}`);
+    const reason = cleanText(section.match(/가\.\s*개정사유\s*([\s\S]*?)\n\s*나\.\s*주요\s*개정내용/u)?.[1] ?? '');
+    const tableStart = section.search(/다\.\s*신\s*[․·ㆍ･]?\s*구\s*조문\s*대비표/u);
+    if (tableStart === -1) return;
+
+    const afterTable = section.slice(tableStart);
+    const endMatch = afterTable.search(/\n\s*라\.\s*참고|\n\s*\d+\)\s*상위\s*법령/u);
+    const tableText = cleanText((endMatch > -1 ? afterTable.slice(0, endMatch) : afterTable)
+      .replace(/다\.\s*신\s*[․·ㆍ･]?\s*구\s*조문\s*대비표/u, '')
+      .replace(/현\s*행\s*개\s*정\(안\)\s*비고/gu, '')
+      .replace(/\[page\s+\d+\]|-\s*\d+\s*-/gu, ''));
+    if (!tableText) return;
+
+    const article = inferPrimaryArticle(tableText) ?? title.replace(/\s*개정\(안\)\s*$/u, '');
+    const split = splitComparisonText(tableText);
+    rows.push({
+      id: `pdf-agenda-${index + 1}`,
+      article,
+      oldText: split.oldText,
+      newText: split.newText,
+      reason: reason || title,
+      confidence: split.confidence,
+      warnings: ['PDF 안건별 신구조문 대비표를 휴리스틱으로 묶어 추출했습니다. 표 셀 단위 정밀 비교는 원문 확인이 필요합니다.'],
+    });
+  });
+
+  return rows;
 }
 
 function parseKoreanComparisonBlocks(text: string): ParsedComparisonRow[] {
@@ -251,6 +300,46 @@ function parseKoreanComparisonBlocks(text: string): ParsedComparisonRow[] {
   }
 
   return rows;
+}
+
+function inferPrimaryArticle(text: string): string | undefined {
+  const article = text.match(/제\s*\d+\s*조(?:의\s*\d+)?\s*\([^\n)]+\)/u)?.[0]
+    ?? text.match(/<\s*별표\s*[^>]+>/u)?.[0]
+    ?? text.match(/부\s*칙/u)?.[0];
+  return article ? cleanText(article).replace(/\s+/g, ' ') : undefined;
+}
+
+function splitComparisonText(text: string): { oldText: string; newText: string; confidence: number } {
+  const compact = cleanText(text);
+  const firstArticle = compact.match(/제\s*\d+\s*조(?:의\s*\d+)?\s*\([^\n)]+\)/u);
+  if (firstArticle?.[0] && firstArticle.index !== undefined) {
+    const articleKey = firstArticle[0].replace(/\s+/g, '');
+    const repeated = [...compact.matchAll(/제\s*\d+\s*조(?:의\s*\d+)?\s*\([^\n)]+\)/gu)]
+      .filter((match) => match.index !== undefined && match.index > firstArticle.index! + firstArticle[0].length)
+      .find((match) => match[0].replace(/\s+/g, '') === articleKey);
+    if (repeated?.index !== undefined) {
+      return {
+        oldText: compact.slice(firstArticle.index).slice(0, repeated.index - firstArticle.index).trim(),
+        newText: compact.slice(repeated.index).trim(),
+        confidence: 0.5,
+      };
+    }
+  }
+
+  const newMarker = compact.search(/<\s*신설\s*>|부\s*칙\s*\(?시행일\)?|\(현행과\s*같음\)/u);
+  if (newMarker > 20) {
+    return {
+      oldText: compact.slice(0, newMarker).trim(),
+      newText: compact.slice(newMarker).trim(),
+      confidence: 0.42,
+    };
+  }
+
+  return {
+    oldText: compact,
+    newText: compact,
+    confidence: 0.32,
+  };
 }
 
 function parseLabelledBlocks(text: string): ParsedComparisonRow[] {
