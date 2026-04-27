@@ -18,6 +18,7 @@ type PdfExtractionPayload = {
   ok: boolean;
   engine?: string;
   pages?: ExtractedPdfPage[];
+  comparisonRows?: ParsedComparisonRow[];
   warnings?: string[];
   error?: string;
 };
@@ -32,7 +33,9 @@ export async function parsePdfUpload(fileName: string, bytes: ArrayBuffer): Prom
   warnings.push(...extracted.warnings);
 
   const pages = extracted.pages ?? [];
-  const rows = parseComparisonRowsFromExtractedText(pages, warnings);
+  const rows = extracted.comparisonRows?.length
+    ? extracted.comparisonRows.map((row, index) => ({ ...row, id: row.id || `pdf-column-${index + 1}` }))
+    : parseComparisonRowsFromExtractedText(pages, warnings);
 
   if (extracted.engine) {
     warnings.push(`PDF text extraction engine: ${extracted.engine}`);
@@ -78,23 +81,24 @@ export async function parsePdfUpload(fileName: string, bytes: ArrayBuffer): Prom
 async function extractPdfText(
   fileName: string,
   bytes: ArrayBuffer,
-): Promise<{ available: boolean; engine?: string; pages?: ExtractedPdfPage[]; warnings: string[] }> {
-  const jsExtracted = await extractPdfTextWithPdfParseChildProcess(fileName, bytes);
-  if (jsExtracted.available && (jsExtracted.pages?.length ?? 0) > 0) return jsExtracted;
-
+): Promise<{ available: boolean; engine?: string; pages?: ExtractedPdfPage[]; comparisonRows?: ParsedComparisonRow[]; warnings: string[] }> {
   const pythonExtracted = await extractPdfTextWithPython(fileName, bytes);
+  if (pythonExtracted.available && ((pythonExtracted.comparisonRows?.length ?? 0) > 0 || (pythonExtracted.pages?.length ?? 0) > 0)) return pythonExtracted;
+
+  const jsExtracted = await extractPdfTextWithPdfParseChildProcess(fileName, bytes);
   return {
-    available: jsExtracted.available || pythonExtracted.available,
-    engine: pythonExtracted.engine ?? jsExtracted.engine,
-    pages: pythonExtracted.pages?.length ? pythonExtracted.pages : jsExtracted.pages,
-    warnings: [...jsExtracted.warnings, ...pythonExtracted.warnings],
+    available: pythonExtracted.available || jsExtracted.available,
+    engine: jsExtracted.engine ?? pythonExtracted.engine,
+    pages: jsExtracted.pages?.length ? jsExtracted.pages : pythonExtracted.pages,
+    comparisonRows: pythonExtracted.comparisonRows,
+    warnings: [...pythonExtracted.warnings, ...jsExtracted.warnings],
   };
 }
 
 async function extractPdfTextWithPdfParseChildProcess(
   fileName: string,
   bytes: ArrayBuffer,
-): Promise<{ available: boolean; engine?: string; pages?: ExtractedPdfPage[]; warnings: string[] }> {
+): Promise<{ available: boolean; engine?: string; pages?: ExtractedPdfPage[]; comparisonRows?: ParsedComparisonRow[]; warnings: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), 'regdiff-pdf-js-'));
   const pdfPath = path.join(dir, safeFileName(fileName));
   const scriptPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'scripts', 'extract-pdf-text.mjs');
@@ -129,7 +133,7 @@ async function extractPdfTextWithPdfParseChildProcess(
 async function extractPdfTextWithPython(
   fileName: string,
   bytes: ArrayBuffer,
-): Promise<{ available: boolean; engine?: string; pages?: ExtractedPdfPage[]; warnings: string[] }> {
+): Promise<{ available: boolean; engine?: string; pages?: ExtractedPdfPage[]; comparisonRows?: ParsedComparisonRow[]; warnings: string[] }> {
   const dir = await mkdtemp(path.join(tmpdir(), 'regdiff-pdf-'));
   const pdfPath = path.join(dir, safeFileName(fileName));
   const scriptPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'scripts', 'extract-pdf-text.py');
@@ -151,6 +155,7 @@ async function extractPdfTextWithPython(
       available: true,
       engine: payload.engine,
       pages: (payload.pages ?? []).filter((page) => page.text.trim()),
+      comparisonRows: payload.comparisonRows ?? [],
       warnings: payload.warnings ?? [],
     };
   } catch (error) {
@@ -166,7 +171,7 @@ async function extractPdfTextWithPython(
 }
 
 async function runExtractor(scriptPath: string, pdfPath: string): Promise<PdfExtractionPayload> {
-  const pythonCandidates = ['python3', 'python'];
+  const pythonCandidates = [process.env.RULELENS_PDF_PYTHON || '.venv/bin/python', 'python3', 'python'];
   const failures: string[] = [];
 
   for (const python of pythonCandidates) {
