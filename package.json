@@ -10,7 +10,10 @@
         "test:kordoc": "node scripts/check-kordoc-adapter.mjs",
         "test:pdf-fixture": "node scripts/check-pdf-fixture.mjs",
         "test:hybrid": "node scripts/check-hybrid-comparison.mjs",
-        "test:hybrid-regression": "node scripts/check-hybrid-regression-fixtures.mjs"
+        "test:hybrid-regression": "node scripts/check-hybrid-regression-fixtures.mjs",
+        "test:legal-evidence": "node scripts/check-legal-evidence.mjs",
+        "test:wave3-ai-mcp": "node scripts/check-wave3-ai-mcp-contract.mjs",
+        "test:ai-review": "node scripts/check-ai-review-fixtures.mjs"
     },
     "dependencies": {
         "@tailwindcss/postcss": "latest",
