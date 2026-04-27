@@ -235,7 +235,27 @@ function PracticalReviewBoard({ result, clauses, selected, onSelect }: { result:
 function ReviewBrief({ result, groups }: { result: ExtendedResult; groups: ClauseGroup[] }) {
   const highRisk = result.clauses.filter(clause => clause.riskLevel === '높음' || clause.riskLevel === '매우 높음').length;
   const lowConfidence = result.clauses.filter(clause => (clause.parserConfidence ?? 1) < 0.75).length;
-  return <div className="card overflow-hidden"><div className="border-b bg-slate-950 p-5 text-white"><p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-200">Practical Review Brief</p><h2 className="mt-1 text-2xl font-black">실무 검토 요약</h2><p className="mt-2 text-sm text-slate-300">안건별로 변경내용, 비고, 검토의견을 한 화면에서 확인합니다.</p></div><div className="grid gap-3 p-4 md:grid-cols-4"><Metric label="안건" value={groups.length} tone="slate" /><Metric label="검토 row" value={result.clauses.length} tone="blue" /><Metric label="내용 고위험" value={highRisk} tone="red" /><Metric label="파서 확인필요" value={lowConfidence} tone="amber" /></div>{result.summary.topFindings?.length ? <div className="border-t p-4"><b className="text-sm">주요 확인 포인트</b><ul className="mt-2 grid gap-2 text-sm text-gray-700">{result.summary.topFindings.slice(0, 4).map(finding => <li key={finding} className="rounded-xl bg-gray-50 p-3">{finding}</li>)}</ul></div> : null}</div>;
+  return <div className="card overflow-hidden"><div className="border-b bg-slate-950 p-5 text-white"><p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-200">Practical Review Brief</p><h2 className="mt-1 text-2xl font-black">실무 검토 요약</h2><p className="mt-2 text-sm text-slate-300">안건별로 변경내용, 비고, 검토의견, 법령 근거 상태를 한 화면에서 확인합니다.</p></div><div className="grid gap-3 p-4 md:grid-cols-4"><Metric label="안건" value={groups.length} tone="slate" /><Metric label="검토 row" value={result.clauses.length} tone="blue" /><Metric label="내용 고위험" value={highRisk} tone="red" /><Metric label="파서 확인필요" value={lowConfidence} tone="amber" /></div><LegalEvidenceBrief clauses={result.clauses} />{result.summary.topFindings?.length ? <div className="border-t p-4"><b className="text-sm">주요 확인 포인트</b><ul className="mt-2 grid gap-2 text-sm text-gray-700">{result.summary.topFindings.slice(0, 4).map(finding => <li key={finding} className="rounded-xl bg-gray-50 p-3">{finding}</li>)}</ul></div> : null}</div>;
+}
+
+function LegalEvidenceBrief({ clauses }: { clauses: ClauseAnalysis[] }) {
+  const statusCounts = legalStatusCounts(clauses);
+  const evidenceCount = clauses.reduce((sum, clause) => sum + (clause.legalCheck?.evidence.length || 0), 0);
+  const conflictClauses = clauses.filter(clause => clause.legalCheck?.status === '충돌 가능성 있음');
+  return <div className="border-t bg-slate-50 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><b>법령 근거 요약</b><p className="mt-1 text-xs text-slate-500">Korean Law evidence는 citation이 있는 경우만 확정 근거로 표시합니다.</p></div><span className={`badge ${evidenceCount ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{evidenceCount ? `citation ${evidenceCount}건` : 'citation 없음'}</span></div><div className="mt-3 grid gap-2 md:grid-cols-4"><LegalStatusPill label="근거 확인" value={statusCounts['근거 확인']} tone="green" /><LegalStatusPill label="충돌 가능성" value={statusCounts['충돌 가능성 있음']} tone="red" /><LegalStatusPill label="추가 확인" value={statusCounts['추가 확인 필요']} tone="amber" /><LegalStatusPill label="근거 미확인" value={statusCounts['근거 미확인']} tone="slate" /></div>{conflictClauses.length ? <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-sm text-red-900"><b>원문 대조 필요</b><ul className="mt-2 list-disc pl-5 leading-6">{conflictClauses.map(clause => <li key={clause.id}>{clause.article}: {clause.legalCheck?.evidence.map(e => e.citation).join(', ') || 'citation 없음'} — {clause.legalCheck?.warnings.join(' ')}</li>)}</ul></div> : null}</div>;
+}
+
+function LegalStatusPill({ label, value, tone }: { label: string; value: number; tone: 'green' | 'red' | 'amber' | 'slate' }) {
+  const toneClass = tone === 'green' ? 'bg-emerald-50 text-emerald-700' : tone === 'red' ? 'bg-red-50 text-red-700' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : 'bg-white text-slate-600';
+  return <div className={`rounded-2xl p-3 ${toneClass}`}><div className="text-xs font-bold opacity-70">{label}</div><div className="text-2xl font-black">{value}</div></div>;
+}
+
+function legalStatusCounts(clauses: ClauseAnalysis[]) {
+  return clauses.reduce<Record<string, number>>((acc, clause) => {
+    const status = clause.legalCheck?.status || '근거 미확인';
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, { '근거 확인': 0, '충돌 가능성 있음': 0, '추가 확인 필요': 0, '근거 미확인': 0 });
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone: 'slate' | 'blue' | 'red' | 'amber' }) {
@@ -248,7 +268,14 @@ function AgendaGroup({ group, index, selected, onSelect, mode }: { group: Clause
 }
 
 function ReviewRow({ clause, selected, onSelect }: { clause: ClauseAnalysis; selected: boolean; onSelect: (c: ClauseAnalysis) => void }) {
-  return <tr onClick={() => onSelect(clause)} className={`cursor-pointer border-t align-top hover:bg-blue-50/60 ${selected ? 'bg-blue-50' : 'bg-white'}`}><td className="p-3"><b className="block text-slate-950">{clause.article}</b><div className="mt-2 flex flex-wrap gap-1"><span className={`badge ${riskClass(clause.riskLevel)}`}>{clause.riskLevel} {clause.riskScore}</span><span className="badge bg-white border text-slate-600">{clause.changeType}</span></div><div className="mt-2 text-xs text-slate-500">파서 신뢰도 {clause.parserConfidence !== undefined ? `${Math.round(clause.parserConfidence * 100)}%` : '미표시'}</div></td><td className="p-3"><ClampedText text={clause.oldText || '(없음)'} /></td><td className="p-3"><ClampedText text={clause.newText || '(없음)'} /></td><td className="p-3"><div className="rounded-xl bg-slate-50 p-3"><b className="text-xs text-slate-500">변경 요약</b><p className="mt-1 leading-6 text-slate-800">{clause.summary}</p></div><div className="mt-2 rounded-xl bg-amber-50 p-3 text-amber-950"><b className="text-xs">비고/사유</b><p className="mt-1 line-clamp-3 leading-6">{clause.reason}</p></div><div className="mt-2 rounded-xl bg-blue-50 p-3 text-blue-950"><b className="text-xs">검토의견 초안</b><p className="mt-1 line-clamp-4 leading-6">{clause.opinionDraft}</p></div></td></tr>;
+  return <tr onClick={() => onSelect(clause)} className={`cursor-pointer border-t align-top hover:bg-blue-50/60 ${selected ? 'bg-blue-50' : 'bg-white'}`}><td className="p-3"><b className="block text-slate-950">{clause.article}</b><div className="mt-2 flex flex-wrap gap-1"><span className={`badge ${riskClass(clause.riskLevel)}`}>{clause.riskLevel} {clause.riskScore}</span><span className="badge bg-white border text-slate-600">{clause.changeType}</span></div><div className="mt-2 text-xs text-slate-500">파서 신뢰도 {clause.parserConfidence !== undefined ? `${Math.round(clause.parserConfidence * 100)}%` : '미표시'}</div><LegalStatusBadge clause={clause} /></td><td className="p-3"><ClampedText text={clause.oldText || '(없음)'} /></td><td className="p-3"><ClampedText text={clause.newText || '(없음)'} /></td><td className="p-3"><div className="rounded-xl bg-slate-50 p-3"><b className="text-xs text-slate-500">변경 요약</b><p className="mt-1 leading-6 text-slate-800">{clause.summary}</p></div><div className="mt-2 rounded-xl bg-amber-50 p-3 text-amber-950"><b className="text-xs">비고/사유</b><p className="mt-1 line-clamp-3 leading-6">{clause.reason}</p></div><div className="mt-2 rounded-xl bg-blue-50 p-3 text-blue-950"><b className="text-xs">검토의견 초안</b><p className="mt-1 line-clamp-4 leading-6">{clause.opinionDraft}</p></div>{clause.legalCheck?.evidence.length ? <div className="mt-2 rounded-xl bg-emerald-50 p-3 text-emerald-950"><b className="text-xs">법령 citation</b><ul className="mt-1 list-disc pl-4 text-xs leading-5">{clause.legalCheck.evidence.map(e => <li key={e.id}>{e.citation}</li>)}</ul></div> : null}{clause.legalCheck?.warnings.length ? <div className="mt-2 rounded-xl bg-red-50 p-3 text-xs leading-5 text-red-900"><b>법령 원문 대조</b><p className="mt-1">{clause.legalCheck.warnings.join(' ')}</p></div> : null}</td></tr>;
+}
+
+function LegalStatusBadge({ clause }: { clause: ClauseAnalysis }) {
+  const status = clause.legalCheck?.status || '근거 미확인';
+  const citationCount = clause.legalCheck?.evidence.length || 0;
+  const tone = status === '근거 확인' ? 'bg-emerald-50 text-emerald-700' : status === '충돌 가능성 있음' ? 'bg-red-50 text-red-700' : status === '추가 확인 필요' ? 'bg-amber-50 text-amber-700' : 'bg-slate-50 text-slate-500';
+  return <div className={`mt-2 rounded-xl px-2 py-1 text-xs font-bold ${tone}`}>법령: {status}{citationCount ? ` · citation ${citationCount}` : ''}</div>;
 }
 
 function ClampedText({ text }: { text: string }) {
