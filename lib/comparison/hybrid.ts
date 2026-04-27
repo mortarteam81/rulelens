@@ -50,9 +50,15 @@ export function buildHybridComparisonTable(
     const proposedText = candidate.row.newText;
 
     if (!match) {
-      rows.push(makeHybridRow(rows.length, '신설', undefined, candidate.row, proposedIndex, undefined, [
-        '성신 기준 조문에서 같은 조문번호/제목을 찾지 못했습니다.',
-      ]));
+      if (candidate.row.oldText?.trim() && proposedText.trim()) {
+        rows.push(makeHybridRow(rows.length, '변경', undefined, candidate.row, proposedIndex, undefined, [
+          '성신 기준 조문에서 같은 조문번호/제목을 찾지 못했습니다. 업로드 파일의 현행/개정안 대비표 기준 변경으로 분류했습니다.',
+        ]));
+      } else {
+        rows.push(makeHybridRow(rows.length, '신설', undefined, candidate.row, proposedIndex, undefined, [
+          '성신 기준 조문에서 같은 조문번호/제목을 찾지 못했습니다.',
+        ]));
+      }
       return;
     }
 
@@ -71,12 +77,16 @@ export function buildHybridComparisonTable(
     rows.push(makeHybridRow(rows.length, '변경', match.indexed.row, candidate.row, proposedIndex, match.score));
   });
 
-  baseline.forEach((indexed, index) => {
-    if (matchedBaseline.has(index)) return;
-    rows.push(makeHybridRow(rows.length, '삭제', indexed.row, undefined, undefined, undefined, [
-      '업로드 개정안에서 대응 조문을 찾지 못해 삭제 가능성으로 분류했습니다.',
-    ]));
-  });
+  if (shouldInferMissingBaselineAsDeletion(baselineRows, proposedRows)) {
+    baseline.forEach((indexed, index) => {
+      if (matchedBaseline.has(index)) return;
+      rows.push(makeHybridRow(rows.length, '삭제', indexed.row, undefined, undefined, undefined, [
+        '업로드 개정안에서 대응 조문을 찾지 못해 삭제 가능성으로 분류했습니다.',
+      ]));
+    });
+  } else if (baselineRows.length > matchedBaseline.size) {
+    warnings.push('업로드 개정안이 일부 조문/별표만 포함한 것으로 보여, 성신 기준의 미매칭 조문을 삭제로 자동 분류하지 않았습니다.');
+  }
 
   if (rows.length === 0 && baselineRows.length && proposedRows.length) {
     warnings.push('성신 기준 현행 조문과 업로드 개정안 사이에서 변경 조문을 찾지 못했습니다.');
@@ -150,7 +160,7 @@ function makeHybridRow(
   extraWarnings: string[] = [],
 ): ParsedComparisonRow {
   const article = proposed?.article ?? baseline?.article;
-  const oldText = baseline?.newText || baseline?.oldText || '';
+  const oldText = baseline?.newText || baseline?.oldText || (kind === '변경' ? proposed?.oldText : '') || '';
   const newText = proposed?.newText || '';
   const baseConfidence = kind === '신설' ? 0.72 : kind === '삭제' ? 0.68 : 0.8;
   const confidence = clamp(Math.min(baseConfidence, matchScore ?? baseConfidence, baseline?.confidence ?? 1, proposed?.confidence ?? 1));
@@ -174,6 +184,14 @@ function makeHybridRow(
     confidence,
     warnings,
   };
+}
+
+function shouldInferMissingBaselineAsDeletion(baselineRows: ParsedComparisonRow[], proposedRows: ParsedComparisonRow[]): boolean {
+  if (baselineRows.length === 0 || proposedRows.length === 0) return false;
+  if (proposedRows.length >= Math.max(3, Math.ceil(baselineRows.length * 0.6))) return true;
+  const explicitDeletionRows = proposedRows.filter((row) => !row.newText?.trim() && row.oldText?.trim()).length;
+  if (explicitDeletionRows > 0) return true;
+  return false;
 }
 
 function articleKey(input?: string): string | undefined {
