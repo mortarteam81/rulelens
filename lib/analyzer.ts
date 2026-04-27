@@ -15,8 +15,41 @@ export async function analyzeRegulation(input:{regulationName:string;purpose:str
   return {regulationName:input.parsedTable?.regulationName||input.regulationName||'업로드 규정',purpose:input.purpose||'실무검토용',sourceFormat:input.parsedTable?.sourceFormat||input.sourceFormat,inputMode:input.inputMode,sourceMetadata:input.sourceMetadata,hybridComparisonSummary:input.hybridComparisonSummary,previousHistory:input.parsedTable?.previousHistory,currentHistory:input.parsedTable?.currentHistory,parserWarnings,summary:{total:clauses.length,changed:clauses.filter(c=>c.oldText&&c.newText).length,created:clauses.filter(c=>!c.oldText&&c.newText).length,deleted:clauses.filter(c=>c.oldText&&!c.newText).length,highRisk:clauses.filter(c=>c.riskLevel==='높음'||c.riskLevel==='매우 높음').length,topFindings:clauses.slice().sort((a,b)=>b.riskScore-a.riskScore).slice(0,5).map(c=>`${c.article}: ${c.summary}`)},clauses};
 }
 
-function classifyClause(id:string,row:ParsedComparisonRow):ClauseAnalysis{const article=row.article||'조문 미상';const reason=row.reason||inferReason(row);const text=`${article} ${row.oldText} ${row.newText} ${reason}`;const domain=buildDomainInsight(article,text,reason);let changeType:ChangeType='문구 정비';let riskLevel:RiskLevel='낮음';let score=20;if(domain){changeType=domain.changeType;score=domain.riskScore;riskLevel=domain.riskLevel}else if(!row.oldText){changeType='신설';score=72;riskLevel='높음'}else if(!row.newText){changeType='삭제';score=78;riskLevel='높음'}else if(reason==='변경'){changeType='변경';score=45;riskLevel='보통'}else if(/상\s*위\s*법\s*령|사립학교법|법령\s*개정/.test(text)){changeType='상위법령 반영 의심';score=76;riskLevel='높음'}else if(/반드시|하여야|의무|제출|승인|심의|거쳐야|허용|반환하지 아니한다/.test(text)){changeType='절차 변경';score=68;riskLevel='높음'}else if(/위원|부서장|총장|권한|책임|외부위원|외부\s*전문가/.test(text)){changeType='권한\/책임 변경';score=55;riskLevel='보통'}else if(/기준|요건|자격|평가|배점|점수|정원/.test(text)){changeType='기준\/요건 변경';score=70;riskLevel='높음'}const lawKeywords=[...text.matchAll(/고등교육법|사립학교법|교원자격검정령|대학설립·운영 규정|대학원 학칙 시행세칙|교원 인사 규정|위원회|심의|자료 제출|등록금|휴학|자퇴/g)].map(m=>m[0]);const uniqueLawKeywords=[...new Set(lawKeywords.length?lawKeywords:['관련 상위규정','위임 근거'])];const aiReview=buildDeterministicClauseReview({row:{...row,reason},changeType,riskScore:score,lawKeywords:uniqueLawKeywords});return {id,article,oldText:row.oldText,newText:row.newText,reason,changeType,riskLevel,riskScore:aiReview.risk.riskScore,summary:domain?.summary??summarize(changeType),impact:domain?.impact??aiReview.risk.practicalImpact,questions:domain?.questions??aiReview.risk.reviewQuestions,opinionDraft:domain?.opinionDraft??aiReview.risk.opinionDraft,lawKeywords:uniqueLawKeywords,legalEvidenceStatus:aiReview.legalEvidence.status,legalEvidenceReason:aiReview.legalEvidence.missingEvidenceReason,riskDrivers:domain?.riskDrivers??aiReview.risk.riskDrivers,aiReviewMode:aiReview.mode,aiReview,parserConfidence:row.confidence,parserWarnings:row.warnings};}
+function classifyClause(id:string,row:ParsedComparisonRow):ClauseAnalysis{const article=row.article||'조문 미상';const reason=row.reason||inferReason(row);const text=`${article} ${row.oldText} ${row.newText} ${reason}`;const domain=buildDomainInsight(article,text,reason);let changeType:ChangeType='문구 정비';let riskLevel:RiskLevel='낮음';let score=20;if(domain){changeType=domain.changeType;score=domain.riskScore;riskLevel=domain.riskLevel}else if(!row.oldText){changeType='신설';score=72;riskLevel='높음'}else if(!row.newText){changeType='삭제';score=78;riskLevel='높음'}else if(reason==='변경'){changeType='변경';score=45;riskLevel='보통'}else if(/상\s*위\s*법\s*령|사립학교법|법령\s*개정/.test(text)){changeType='상위법령 반영 의심';score=76;riskLevel='높음'}else if(/반드시|하여야|의무|제출|승인|심의|거쳐야|허용|반환하지 아니한다/.test(text)){changeType='절차 변경';score=68;riskLevel='높음'}else if(/위원|부서장|총장|권한|책임|외부위원|외부\s*전문가/.test(text)){changeType='권한\/책임 변경';score=55;riskLevel='보통'}else if(/기준|요건|자격|평가|배점|점수|정원/.test(text)){changeType='기준\/요건 변경';score=70;riskLevel='높음'}const lawKeywords=inferLawKeywords(article,text,reason,domain);const uniqueLawKeywords=[...new Set(lawKeywords.length?lawKeywords:['관련 상위규정','위임 근거'])];const aiReview=buildDeterministicClauseReview({row:{...row,reason},changeType,riskScore:score,lawKeywords:uniqueLawKeywords});return {id,article,oldText:row.oldText,newText:row.newText,reason,changeType,riskLevel,riskScore:aiReview.risk.riskScore,summary:domain?.summary??summarize(changeType),impact:domain?.impact??aiReview.risk.practicalImpact,questions:domain?.questions??aiReview.risk.reviewQuestions,opinionDraft:domain?.opinionDraft??aiReview.risk.opinionDraft,lawKeywords:uniqueLawKeywords,legalEvidenceStatus:aiReview.legalEvidence.status,legalEvidenceReason:aiReview.legalEvidence.missingEvidenceReason,riskDrivers:domain?.riskDrivers??aiReview.risk.riskDrivers,aiReviewMode:aiReview.mode,aiReview,parserConfidence:row.confidence,parserWarnings:row.warnings};}
 type DomainInsight={changeType:ChangeType;riskLevel:RiskLevel;riskScore:number;summary:string;impact:string;questions:string[];opinionDraft:string;riskDrivers:string[]};
+
+function inferLawKeywords(article:string,text:string,reason:string,domain?:DomainInsight):string[]{
+  const keywords=new Set([...text.matchAll(/고등교육법|사립학교법|교원자격검정령|대학설립·운영 규정|대학원 학칙 시행세칙|교원 인사 규정|위원회|심의|자료 제출|등록금|휴학|자퇴/g)].map(m=>m[0]));
+  const compact=`${article} ${text} ${reason} ${domain?.summary??''}`.replace(/\s+/g,'');
+
+  if(/학칙|편제|입학정원|학위수여|졸업|부전공|복수전공|융합연계전공|대학원/.test(compact)){
+    keywords.add('고등교육법(추론 후보)');
+    keywords.add('대학설립·운영 규정(추론 후보)');
+  }
+  if(/입학정원|모집단위|정원표|편제/.test(compact)){
+    keywords.add('고등교육법(추론 후보)');
+    keywords.add('대학설립·운영 규정(추론 후보)');
+  }
+  if(/교원업적평가|교원|재임용|연구업적|필수업적|간접비|석박사|공동지도교수|예술계열/.test(compact)){
+    keywords.add('고등교육법(추론 후보)');
+    keywords.add('사립학교법(추론 후보)');
+    keywords.add('교원 인사 규정(추론 후보)');
+  }
+  if(/대학원학칙시행세칙|공동지도교수|석박사/.test(compact)){
+    keywords.add('대학원 학칙 시행세칙(추론 후보)');
+  }
+  if(/기금운용심의회|외부전문가|회계또는재무|상위법령개정반영/.test(compact)){
+    keywords.add('사립학교법(추론 후보)');
+  }
+  if(/연구산학협력단|산학협력단|정관|단장/.test(compact)){
+    keywords.add('산업교육진흥 및 산학연협력촉진에 관한 법률(추론 후보)');
+  }
+  if(/시행일|경과조치|부칙/.test(compact)){
+    keywords.add('관련 상위규정');
+  }
+
+  return [...keywords];
+}
 
 function buildDomainInsight(article:string,text:string,reason:string):DomainInsight|undefined{
   const compact=text.replace(/\s+/g,'');

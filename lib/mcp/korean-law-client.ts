@@ -186,7 +186,9 @@ export async function checkLegalCompliance(input: {
   const hasPossibleConflict = evidence.some((item) => hasConflictSignal(clauseText, item.text));
   if (hasPossibleConflict) warnings.push('조문 문안과 법령 근거 사이에 상반되는 표현이 있어 원문 대조가 필요합니다.');
 
-  const needsMore = keywords.some((keyword) => /관련 상위규정|위임 근거|위원회|심의|자료 제출/.test(keyword)) && evidence.length < Math.min(2, keywords.length);
+  const hasInferredKeyword = keywords.some((keyword) => /추론 후보/.test(keyword));
+  const needsMore = hasInferredKeyword || (keywords.some((keyword) => /관련 상위규정|위임 근거|위원회|심의|자료 제출/.test(keyword)) && evidence.length < Math.min(2, keywords.length));
+  if (hasInferredKeyword) warnings.push('추론 후보 키워드로 찾은 법령 근거입니다. 확정 전 담당자 원문 대조가 필요합니다.');
   const status: LegalCheckStatus = hasPossibleConflict ? '충돌 가능성 있음' : needsMore ? '추가 확인 필요' : '근거 확인';
   const missingEvidence = status === '근거 확인' || status === '충돌 가능성 있음' ? [] : [query];
 
@@ -257,7 +259,8 @@ function inferLawTargets(query: LegalEvidenceQuery): { lawName: string; articleN
   const text = `${query.article ?? ''} ${query.text ?? ''} ${query.keywords.join(' ')}`;
   const targets = new Map<string, { lawName: string; articleNumber?: string }>();
   for (const keyword of query.keywords) {
-    if (/법|령|규정/u.test(keyword) && !/위원회|심의|자료 제출|관련 상위규정|위임 근거/u.test(keyword)) targets.set(keyword, { lawName: keyword });
+    const lawName = stripInferredMarker(keyword);
+    if (/법|령|규정/u.test(lawName) && !/위원회|심의|자료 제출|관련 상위규정|위임 근거/u.test(lawName)) targets.set(lawName, { lawName });
   }
   if (/사립학교법|기금운용심의회|외부\s*전문가/u.test(text)) targets.set('사립학교법', { lawName: '사립학교법', articleNumber: '제32조의3' });
   return [...targets.values()];
@@ -274,6 +277,10 @@ function inferArticleNumber(query: LegalEvidenceQuery, lawName: string): string 
 function chooseBestLaw(laws: LawSearchHit[], lawName: string): LawSearchHit | undefined {
   const normalized = normalizeTerm(lawName);
   return laws.find((law) => normalizeTerm(law.lawName || '') === normalized) || laws.find((law) => normalizeTerm(law.lawName || '').includes(normalized)) || laws[0];
+}
+
+function stripInferredMarker(keyword: string): string {
+  return keyword.replace(/\(추론 후보\)$/u, '').trim();
 }
 
 function normalizeCliArgs(toolName: string, args: Record<string, unknown>) {
