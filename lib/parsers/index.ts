@@ -42,3 +42,10 @@ function stripExtension(fileName: string): string {
 }
 
 export type { ParsedComparisonRow, ParsedComparisonTable, SourceFormat, SourceKind } from '@/lib/parsers/types';
+export {
+  normalizeComparisonRows,
+  normalizeComparisonTable,
+  normalizeHeaderLabel,
+  parseRawComparisonText,
+} from '@/lib/parsers/normalize';
+export type { NormalizeComparisonRowsOptions, NormalizeComparisonTableOptions, RawComparisonRow } from '@/lib/parsers/normalize';
