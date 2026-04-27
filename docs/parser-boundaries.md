@@ -14,7 +14,7 @@
 
 ## PDF
 - Implemented in `lib/parsers/pdf.ts` as a server-side adapter boundary.
-- Uses JS `pdf-parse` first for minimal text/page extraction.
+- Uses JS `pdf-parse` through `scripts/extract-pdf-text.mjs` child-process adapter for minimal text/page extraction. The child-process boundary avoids bundling issues with PDF.js workers in Next server routes.
 - Falls back to `scripts/extract-pdf-text.py`, which tries PyMuPDF (`fitz`) and then `pdfplumber` if those tools are available on the host.
 - Normalizes extracted text with low-confidence Korean 신구조문 대비표 heuristics. PDF table cell boundaries are inherently lossy, so rows always carry parser warnings.
 - Validated against `fixtures/uploads/raw/2026-1st-temporary-regulation-committee-materials.pdf` for meaningful Korean text and the 별표Ⅰ 입학정원표 comparison block.
