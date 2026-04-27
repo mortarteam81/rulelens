@@ -130,4 +130,31 @@ assert.equal(liveShapeResult.evidence[0].citation, '사립학교법 제32조의3
 assert.ok(toolCalls.some((call) => call.name === 'search_law'));
 assert.ok(toolCalls.some((call) => call.name === 'get_law_text' && call.args.jo === '제32조의3'));
 
-console.log('✓ legal evidence adapter fixtures: evidence, missingEvidence, no-server fallback, conflict status, live MCP tool shape');
+const cliTextRetriever = new KoreanLawMcpEvidenceRetriever({
+  async callTool(name) {
+    if (name === 'search_law') {
+      return { text: `검색 결과 (총 1건):\n\n1. 사립학교법\n   - 법령ID: 000888\n   - MST: 273349\n   - 공포일: 20250814\n   - 구분: 법률` };
+    }
+    if (name === 'get_law_text') {
+      return { text: `법령명: 사립학교법\n공포일: 20250814\n시행일: 20260215\n\n제32조의3 기금운용심의회의 설치 등\n제32조의3(기금운용심의회의 설치 등)\n② 기금운용심의회는 위원장 1명을 포함하여 15명 이내의 위원으로 구성하되, 외부 전문가는 1명 이상 포함하여야 한다.` };
+    }
+    return [];
+  },
+});
+const cliTextResult = await checkLegalCompliance({
+  retriever: cliTextRetriever,
+  clause: {
+    article: '제3조 (구성)',
+    oldText: '외부전문가는 1명 이상 포함하여야 한다.',
+    newText: '외부 전문가는 2명 이상 포함하여야 한다.',
+    lawKeywords: ['사립학교법'],
+  },
+});
+assert.equal(cliTextResult.status, '충돌 가능성 있음');
+assert.equal(cliTextResult.evidence.length, 1);
+assert.equal(cliTextResult.evidence[0].lawName, '사립학교법');
+assert.equal(cliTextResult.evidence[0].articleNumber, '제32조의3');
+assert.equal(cliTextResult.evidence[0].citation, '사립학교법 제32조의3');
+assert.match(cliTextResult.warnings.join('\n'), /원문 대조/);
+
+console.log('✓ legal evidence adapter fixtures: evidence, missingEvidence, no-server fallback, conflict status, live MCP tool shape, CLI text parsing');

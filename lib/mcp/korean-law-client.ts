@@ -71,9 +71,8 @@ export class KoreanLawCliToolClient implements KoreanLawMcpToolClient {
     }
     const cliName = name === 'law_search' ? 'search_law' : name === 'law_get_article' ? 'get_law_text' : name;
     const normalizedArgs = normalizeCliArgs(cliName, args);
-    const jsonInput = JSON.stringify({ ...normalizedArgs, apiKey: this.apiKey });
     try {
-      const { stdout, stderr } = await execFileAsync(this.command, [cliName, '--json-input', jsonInput], {
+      const { stdout, stderr } = await execFileAsync(this.command, buildCliArgs(cliName, normalizedArgs, this.apiKey), {
         timeout: this.timeoutMs,
         maxBuffer: this.maxBuffer,
         encoding: 'utf8',
@@ -215,7 +214,10 @@ function normalizeEvidenceItem(item: Record<string, unknown>, source: LawEvidenc
 }
 
 function normalizeLawSearchResponse(response: unknown): LawSearchHit[] {
-  return extractItems(response).map((item) => {
+  const items = extractItems(response);
+  const parsedFromText = items.flatMap((item) => typeof (item as { text?: unknown }).text === 'string' ? parseLawSearchText((item as { text: string }).text) : []);
+  if (parsedFromText.length) return parsedFromText;
+  return items.map((item) => {
     const record = item as Record<string, unknown>;
     return {
       lawName: stringField(record, ['lawName', '법령명한글', '법령명', 'name', 'title']),
@@ -223,6 +225,17 @@ function normalizeLawSearchResponse(response: unknown): LawSearchHit[] {
       lawId: stringField(record, ['lawId', 'LAW_ID', '법령ID']),
     };
   }).filter((item) => item.lawName || item.mst || item.lawId);
+}
+
+function parseLawSearchText(text: string): LawSearchHit[] {
+  const entryPattern = /(?:^|\n)\s*\d+\.\s*([^\n]+)\n([\s\S]*?)(?=\n\s*\d+\.\s*[^\n]+\n|\n\s*💡|$)/gu;
+  return [...text.matchAll(entryPattern)].map((match) => {
+    const block = match[2] || '';
+    const name = match[1]?.trim();
+    const lawId = block.match(/법령ID:\s*([^\n]+)/u)?.[1]?.trim();
+    const mst = block.match(/MST:\s*([^\n]+)/u)?.[1]?.trim();
+    return { lawName: name, lawId, mst };
+  }).filter((item) => item.lawName || item.lawId || item.mst);
 }
 
 function extractItems(response: unknown): unknown[] {
@@ -269,6 +282,19 @@ function normalizeCliArgs(toolName: string, args: Record<string, unknown>) {
   return args;
 }
 
+function buildCliArgs(toolName: string, args: Record<string, unknown>, apiKey: string): string[] {
+  if (toolName === 'search_law') return [toolName, '--query', String(args.query || ''), '--display', String(args.display || 5), '--apiKey', apiKey];
+  if (toolName === 'get_law_text') {
+    const cliArgs = [toolName];
+    if (args.mst) cliArgs.push('--mst', String(args.mst));
+    if (args.lawId) cliArgs.push('--lawId', String(args.lawId));
+    if (args.jo) cliArgs.push('--jo', String(args.jo));
+    cliArgs.push('--apiKey', apiKey);
+    return cliArgs;
+  }
+  return [toolName, '--json-input', JSON.stringify({ ...args, apiKey })];
+}
+
 function parseCliOutput(stdout: string, stderr: string): unknown {
   const text = stdout.trim();
   if (!text) return { isError: true, stderr };
@@ -291,7 +317,8 @@ function extractTextFromContent(content: unknown): string | undefined {
 }
 
 function inferLawNameFromText(text?: string): string | undefined {
-  return text?.match(/([가-힣A-Za-z·]+법)\s*제\s*\d+\s*조/u)?.[1];
+  return text?.match(/법령명:\s*([^\n]+)/u)?.[1]?.trim()
+    || text?.match(/([가-힣A-Za-z·]+법)\s*제\s*\d+\s*조/u)?.[1];
 }
 
 function inferArticleFromText(text?: string): string | undefined {
@@ -342,7 +369,8 @@ function hasConflictSignal(clauseText: string, evidenceText: string) {
   const clause = normalizeTerm(clauseText);
   const evidence = normalizeTerm(evidenceText);
   return (/반환하지아니|반환불가|환불하지/.test(clause) && /반환하여야|반환해야|반환한다/.test(evidence)) ||
-    (/허용하지아니|금지/.test(clause) && /허용할수있|허용한다/.test(evidence));
+    (/허용하지아니|금지/.test(clause) && /허용할수있|허용한다/.test(evidence)) ||
+    (/외부전문가.*2명이상|외부전문가는2명이상/.test(clause) && /외부전문가.*1명이상|외부전문가는1명이상/.test(evidence));
 }
 
 function messageOf(error: unknown): string {
