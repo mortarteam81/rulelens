@@ -14,7 +14,8 @@
     "test:legal-evidence": "node scripts/check-legal-evidence.mjs",
     "test:wave3-ai-mcp": "node scripts/check-wave3-ai-mcp-contract.mjs",
     "test:ai-review": "node scripts/check-ai-review-fixtures.mjs",
-    "test:pdf-regression": "node scripts/check-pdf-regression-fixtures.mjs"
+    "test:pdf-regression": "node scripts/check-pdf-regression-fixtures.mjs",
+    "test:analysis-quality": "node scripts/check-analysis-message-quality.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "latest",
