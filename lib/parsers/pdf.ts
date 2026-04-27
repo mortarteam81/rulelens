@@ -33,9 +33,10 @@ export async function parsePdfUpload(fileName: string, bytes: ArrayBuffer): Prom
   warnings.push(...extracted.warnings);
 
   const pages = extracted.pages ?? [];
-  const rows = extracted.comparisonRows?.length
+  const rawRows = extracted.comparisonRows?.length
     ? extracted.comparisonRows.map((row, index) => ({ ...row, id: row.id || `pdf-column-${index + 1}` }))
     : parseComparisonRowsFromExtractedText(pages, warnings);
+  const rows = splitStructuredPdfRows(rawRows);
 
   if (extracted.engine) {
     warnings.push(`PDF text extraction engine: ${extracted.engine}`);
@@ -196,6 +197,116 @@ async function runExtractor(scriptPath: string, pdfPath: string): Promise<PdfExt
     error: 'python-unavailable',
     warnings: [`Python 실행 파일을 찾거나 실행하지 못했습니다. ${failures.join(' / ')}`],
   };
+}
+
+function splitStructuredPdfRows(rows: ParsedComparisonRow[]): ParsedComparisonRow[] {
+  const expanded: ParsedComparisonRow[] = [];
+
+  rows.forEach((row) => {
+    const oldSegments = splitTextByStructuralMarkers(row.oldText);
+    const newSegments = splitTextByStructuralMarkers(row.newText);
+    const totalSegments = oldSegments.length + newSegments.length;
+
+    if (totalSegments < 3) {
+      expanded.push(row);
+      return;
+    }
+
+    const usedNew = new Set<number>();
+    let produced = 0;
+
+    oldSegments.forEach((oldSegment, oldIndex) => {
+      const newIndex = findMatchingSegmentIndex(oldSegment, newSegments, usedNew);
+      if (newIndex !== undefined) usedNew.add(newIndex);
+      const newSegment = newIndex !== undefined ? newSegments[newIndex] : undefined;
+      expanded.push(makeSplitRow(row, produced, oldSegment.label, oldSegment.text, newSegment?.text ?? '', row.reason));
+      produced += 1;
+    });
+
+    newSegments.forEach((newSegment, newIndex) => {
+      if (usedNew.has(newIndex)) return;
+      expanded.push(makeSplitRow(row, produced, newSegment.label, '', newSegment.text, row.reason));
+      produced += 1;
+    });
+
+    if (produced === 0) expanded.push(row);
+  });
+
+  return expanded.map((row, index) => ({ ...row, id: row.id || `pdf-row-${index + 1}` }));
+}
+
+type TextSegment = { label: string; key: string; text: string };
+
+function splitTextByStructuralMarkers(text: string): TextSegment[] {
+  const normalized = cleanText(text);
+  if (!normalized) return [];
+
+  const markerPattern = /제\s*\d+\s*조(?:의\s*\d+)?\s*\([^)]{1,60}\)|<\s*별표\s*[^>]{1,100}>|부\s*칙/gu;
+  const matches = [...normalized.matchAll(markerPattern)].filter((match) => {
+    if (match.index === undefined) return false;
+    const label = cleanText(match[0]);
+    return !/^<\s*별표\s*[\dⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ-]+\s*>$/u.test(label);
+  });
+  if (matches.length <= 1) return [{ label: inferPrimaryArticle(normalized) ?? 'PDF 신구조문 대비표', key: 'single', text: normalized }];
+
+  return matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const end = matches[index + 1]?.index ?? normalized.length;
+    const label = cleanText(match[0]).replace(/\s+/g, ' ');
+    return { label, key: segmentKey(label), text: normalized.slice(start, end).trim() };
+  }).filter((segment) => segment.text.length > 0);
+}
+
+function findMatchingSegmentIndex(segment: TextSegment, candidates: TextSegment[], used: Set<number>): number | undefined {
+  let fallback: number | undefined;
+  for (let index = 0; index < candidates.length; index += 1) {
+    if (used.has(index)) continue;
+    const candidate = candidates[index];
+    if (candidate.key === segment.key) return index;
+    if (fallback === undefined && candidate.label === segment.label) fallback = index;
+  }
+  return fallback;
+}
+
+function makeSplitRow(source: ParsedComparisonRow, index: number, article: string, oldText: string, newText: string, reason?: string): ParsedComparisonRow {
+  return {
+    ...source,
+    id: `${source.id || 'pdf'}-split-${index + 1}`,
+    article,
+    oldText,
+    newText,
+    reason: inferSplitReason(article, oldText, newText, reason),
+    confidence: Math.min(source.confidence ?? 0.6, 0.72),
+    warnings: [...(source.warnings ?? []), '안건 단위 PDF row를 조문/별표/부칙 단위로 추가 분리했습니다.'],
+  };
+}
+
+function inferSplitReason(article: string, oldText: string, newText: string, fallback?: string): string | undefined {
+  if (!oldText.trim() && newText.trim()) return '신설';
+  if (oldText.trim() && !newText.trim()) return '삭제 가능성';
+  const compactNew = normalizeCompact(newText);
+  if (/부칙/u.test(article)) return '부칙';
+  if (compactNew.includes('신설')) return '신설 또는 항 신설';
+  if (fallback) return fallback;
+  return undefined;
+}
+
+function segmentKey(label: string): string {
+  const article = articleKey(label);
+  if (article) return article;
+  if (/별표/u.test(label)) return 'appendix';
+  if (/부\s*칙/u.test(label)) return 'supplementary';
+  return normalizeCompact(label).slice(0, 60);
+}
+
+function articleKey(input: string): string | undefined {
+  const match = input.match(/제\s*(\d+)\s*조(?:의\s*(\d+))?/u);
+  if (!match) return undefined;
+  return `제${Number(match[1])}조${match[2] ? `의${Number(match[2])}` : ''}`;
+}
+
+function normalizeCompact(input: string): string {
+  return input.replace(/\s+/g, '').replace(/[「」『』()（）.,，。ㆍ․·･]/g, '').toLowerCase();
 }
 
 function parseComparisonRowsFromExtractedText(pages: ExtractedPdfPage[], tableWarnings: string[]): ParsedComparisonRow[] {
