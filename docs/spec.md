@@ -7,7 +7,7 @@ HWP/PDF 규정 신구조문 대비표를 업로드하여 조문별 변경사항,
 - HWP/PDF 업로드 UI
 - 조문별 비교 대시보드
 - 변경 유형/위험도/확인 질문/검토의견 생성
-- Korean Law MCP, Gordon MCP 연동 지점 설계
+- Korean Law MCP, kordoc MCP 연동 지점 설계
 
 ## 향후 구현
 - HWP 파싱: hwp5txt/pyhwp 또는 변환 서버

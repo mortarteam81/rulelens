@@ -247,6 +247,6 @@ function LegalCheckBox({ clause }: { clause: ClauseAnalysis }) {
 
 function DiffBox({ title, html }: { title: string; html: string }) { return <div className="rounded-2xl border bg-white p-4"><h3 className="mb-2 font-bold">{title}</h3><p className="diff whitespace-pre-wrap text-sm leading-7" dangerouslySetInnerHTML={{ __html: html }} /></div>; }
 function Info({ title, text }: { title: string; text: string }) { return <div><h3 className="mb-2 font-bold">{title}</h3><p className="rounded-2xl bg-gray-50 p-4 text-sm leading-7 text-gray-700">{text}</p></div>; }
-function McpCard() { return <div className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-950"><div className="mb-1 flex items-center gap-2 font-bold"><CheckCircle2 size={18} /> MCP 연동 예정</div><p>Korean Law MCP: 법령 검색/근거 확인<br />Gordon MCP: 문서 추론/체크리스트 생성</p></div>; }
+function McpCard() { return <div className="rounded-2xl bg-blue-50 p-4 text-sm text-blue-950"><div className="mb-1 flex items-center gap-2 font-bold"><CheckCircle2 size={18} /> MCP 연동 예정</div><p>Korean Law MCP: 법령 검색/근거 확인<br />kordoc MCP: 문서 파싱/표 추출/문서 비교</p></div>; }
 function EmptyState() { return <div className="card p-10 text-center"><FileText className="mx-auto mb-3" size={42} /><h2 className="text-2xl font-black">분석할 대비표를 입력하세요</h2><p className="mt-2 text-gray-600">URL only, file only, URL+file hybrid 세 가지 모드를 지원합니다.</p></div>; }
 function riskClass(r: string) { return r === '낮음' ? 'risk-low' : r === '보통' ? 'risk-medium' : r === '높음' ? 'risk-high' : 'risk-critical'; }

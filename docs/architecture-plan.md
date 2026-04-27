@@ -17,7 +17,7 @@ Input Source
 → rule-based risk pre-score
 → AI clause analysis
 → Korean Law MCP evidence retrieval
-→ Gordon MCP practical reasoning
+→ kordoc MCP document parsing/table extraction/document comparison
 → validation
 → dashboard rendering
 ```
