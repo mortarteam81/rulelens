@@ -59,8 +59,8 @@ try {
   const available = new KordocAdapter({
     runner: async (file, args) => {
       calls.push({ file, args });
-      assert.equal(file, 'npx');
-      assert.deepEqual(args.slice(0, 2), ['--no-install', 'kordoc']);
+      assert.ok(file === 'npx' || /node_modules\/\.bin\/kordoc(?:\.cmd)?$/.test(file), `unexpected kordoc command ${file}`);
+      if (file === 'npx') assert.deepEqual(args.slice(0, 2), ['--no-install', 'kordoc']);
       if (args.includes('--version')) return { stdout: 'kordoc 2.4.0\n', stderr: '' };
       return {
         stdout: [

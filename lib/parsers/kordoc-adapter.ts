@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -16,7 +16,7 @@ export type KordocBoundaryOperation = 'parse_document' | 'parse_table' | 'compar
 
 export type KordocDetection = {
   available: boolean;
-  mode: 'local-npx' | 'mcp-configured' | 'unavailable';
+  mode: 'local-bin' | 'local-npx' | 'mcp-configured' | 'unavailable';
   command?: string;
   version?: string;
   warnings: string[];
@@ -84,6 +84,24 @@ export class KordocAdapter {
       };
     }
 
+    const localBin = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'kordoc.cmd' : 'kordoc');
+    try {
+      await access(localBin);
+      const result = await this.runner(localBin, ['--version'], {
+        timeout: 5_000,
+        maxBuffer: 1024 * 1024,
+      });
+      return {
+        available: true,
+        mode: 'local-bin',
+        command: localBin,
+        version: firstLine(result.stdout || result.stderr),
+        warnings: result.stderr.trim() ? [`kordoc detection stderr: ${result.stderr.trim().slice(0, 500)}`] : [],
+      };
+    } catch {
+      // Try npx without installing packages as a safe fallback.
+    }
+
     try {
       const result = await this.runner('npx', [...LOCAL_NPX_KORDOC, '--version'], {
         timeout: 5_000,
@@ -128,7 +146,8 @@ export class KordocAdapter {
 
     try {
       await writeFile(filePath, Buffer.from(input.bytes));
-      const result = await this.runner('npx', [...LOCAL_NPX_KORDOC, filePath], {
+      const command = commandForDetection(detection);
+      const result = await this.runner(command.file, [...command.args, filePath], {
         timeout: KORDOC_TIMEOUT_MS,
         maxBuffer: KORDOC_MAX_BUFFER,
       });
@@ -222,6 +241,11 @@ async function defaultRunner(file: string, args: string[], options: { timeout: n
     encoding: 'utf8',
   });
   return { stdout, stderr };
+}
+
+function commandForDetection(detection: KordocDetection): { file: string; args: string[] } {
+  if (detection.mode === 'local-bin' && detection.command) return { file: detection.command, args: [] };
+  return { file: 'npx', args: [...LOCAL_NPX_KORDOC] };
 }
 
 function emptyTable(input: KordocDocumentInput, warnings: string[], regulationName = stripExtension(input.fileName)): ParsedComparisonTable {

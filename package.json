@@ -15,7 +15,8 @@
     "test:wave3-ai-mcp": "node scripts/check-wave3-ai-mcp-contract.mjs",
     "test:ai-review": "node scripts/check-ai-review-fixtures.mjs",
     "test:pdf-regression": "node scripts/check-pdf-regression-fixtures.mjs",
-    "test:analysis-quality": "node scripts/check-analysis-message-quality.mjs"
+    "test:analysis-quality": "node scripts/check-analysis-message-quality.mjs",
+    "test:kordoc-direct": "node scripts/check-kordoc-direct-experiment.mjs"
   },
   "dependencies": {
     "@tailwindcss/postcss": "latest",
@@ -25,9 +26,11 @@
     "cfb": "^1.2.2",
     "fast-xml-parser": "^5.7.2",
     "jszip": "^3.10.1",
+    "kordoc": "^2.5.2",
     "lucide-react": "latest",
     "next": "latest",
     "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^5.6.205",
     "react": "latest",
     "react-dom": "latest",
     "tailwindcss": "latest",

@@ -22,10 +22,18 @@
 ## kordoc CLI/MCP adapter boundary
 - Implemented in `lib/parsers/kordoc-adapter.ts` as an optional augmentation layer, not a hard dependency.
 - Role: kordoc can parse HWP/HWPX/PDF/XLSX/DOCX into Markdown, preserve complex tables better than local heuristics, and expose MCP tools such as `parse_document`, `parse_table`, and document comparison. In this app it is treated as a sidecar parser whose output must still pass through regdiff normalization and warnings.
-- Safe detection only: the adapter checks an already-available local `npx --no-install kordoc --version`, or notices future MCP hints via `KORDOC_MCP_COMMAND`/`KORDOC_MCP_URL`. It never runs `kordoc setup`, installs packages, or patches Claude/Cursor/MCP client config.
-- `parse_document`: when local kordoc is available, writes the upload to a temp file and calls `npx --no-install kordoc <file>`, returning Markdown plus warnings. When unavailable, returns `ok: false` with actionable warnings so HWPX/HWP/PDF fallbacks continue.
+- Safe detection only: the adapter first checks a project-local `node_modules/.bin/kordoc`, then falls back to an already-available `npx --no-install kordoc --version`, or notices future MCP hints via `KORDOC_MCP_COMMAND`/`KORDOC_MCP_URL`. It never runs `kordoc setup` or patches Claude/Cursor/MCP client config.
+- `parse_document`: when local kordoc is available, writes the upload to a temp file and calls the detected kordoc command, returning Markdown plus warnings. When unavailable, returns `ok: false` with actionable warnings so HWPX/HWP/PDF fallbacks continue.
 - `parse_table`: calls `parse_document`, then feeds kordoc Markdown tables into `normalizeComparisonTable`. This can replace or augment current HWP/PDF table heuristics once fixture quality proves better.
 - `compare_documents`: boundary is defined for future MCP/CLI schema integration, but currently returns a graceful warning and leaves comparison to the existing hybrid pipeline. Once kordoc's stable tool contract is chosen, previous/current documents can be routed here.
+
+
+### Wave 3.8 direct experiment notes
+- `kordoc` was added as a project dependency for direct CLI experiments; `pdfjs-dist` is also present because kordoc PDF parsing requires it.
+- `npx -y kordoc` could parse HWP, but its temporary execution environment did not see project `pdfjs-dist`, so PDF parsing failed there. The project-local binary `node_modules/.bin/kordoc` successfully parsed the HWP and both PDF fixtures.
+- Current quality finding: kordoc is useful as an optional sidecar and preserves more HTML/Markdown table structure, especially for HWP/PDF large tables. However, its PDF output can still mix headers or produce irregular table chunks, so the current pdfplumber row/column restoration remains the primary production path for the multi-agenda PDF fixture.
+- Recommended strategy: keep `pdfplumber/current parser` as primary for now, use kordoc as optional parser comparison/augmentation, and only promote it to primary per format after fixture-based quality gates prove better output.
+- Regression command: `npm run test:kordoc-direct` verifies local kordoc can parse the HWP fixture, the 1st committee PDF, and the 3rd committee multi-agenda PDF.
 
 ## Still missing / intentionally deferred
 - OCR/scanned document handling is out of MVP scope.
