@@ -16,11 +16,13 @@ const require = createRequire(import.meta.url);
 const sandbox = { exports: {}, require, module: { exports: {} } };
 sandbox.module.exports = sandbox.exports;
 vm.runInNewContext(compiled, sandbox, { filename: sourcePath });
-const { MockLawEvidenceRetriever, KoreanLawMcpEvidenceRetriever, checkLegalCompliance } = sandbox.module.exports;
+const { MockLawEvidenceRetriever, KoreanLawMcpEvidenceRetriever, KoreanLawCliToolClient, createConfiguredKoreanLawEvidenceRetriever, checkLegalCompliance } = sandbox.module.exports;
 
 assert.equal(typeof MockLawEvidenceRetriever, 'function', 'mock retriever export exists');
 assert.equal(typeof KoreanLawMcpEvidenceRetriever, 'function', 'MCP adapter export exists');
 assert.equal(typeof checkLegalCompliance, 'function', 'compliance helper export exists');
+assert.equal(typeof KoreanLawCliToolClient, 'function', 'CLI client export exists');
+assert.equal(typeof createConfiguredKoreanLawEvidenceRetriever, 'function', 'configured retriever factory export exists');
 
 const verifiedRetriever = new MockLawEvidenceRetriever([
   {
@@ -98,4 +100,34 @@ const conflictResult = await checkLegalCompliance({
 assert.equal(conflictResult.status, '충돌 가능성 있음');
 assert.equal(conflictResult.missingEvidence.length, 0);
 
-console.log('✓ legal evidence adapter fixtures: evidence, missingEvidence, no-server fallback, conflict status');
+const toolCalls = [];
+const liveShapeRetriever = new KoreanLawMcpEvidenceRetriever({
+  async callTool(name, args) {
+    toolCalls.push({ name, args });
+    if (name === 'search_law') {
+      return { results: [{ lawName: '사립학교법', mst: '000001', lawId: 'LAW001' }] };
+    }
+    if (name === 'get_law_text') {
+      return {
+        content: [{ type: 'text', text: '사립학교법 제32조의3(기금운용심의회의 설치 등) 외부 전문가는 2명 이상 포함하여야 한다.' }],
+      };
+    }
+    return [];
+  },
+});
+const liveShapeResult = await checkLegalCompliance({
+  retriever: liveShapeRetriever,
+  clause: {
+    article: '제3조 (구성)',
+    oldText: '외부전문가는 1명 이상 포함하여야 한다.',
+    newText: '외부 전문가는 2명 이상 포함하여야 한다.',
+    lawKeywords: ['사립학교법', '위원회'],
+  },
+});
+assert.equal(liveShapeResult.status, '추가 확인 필요');
+assert.equal(liveShapeResult.evidence.length, 1);
+assert.equal(liveShapeResult.evidence[0].citation, '사립학교법 제32조의3');
+assert.ok(toolCalls.some((call) => call.name === 'search_law'));
+assert.ok(toolCalls.some((call) => call.name === 'get_law_text' && call.args.jo === '제32조의3'));
+
+console.log('✓ legal evidence adapter fixtures: evidence, missingEvidence, no-server fallback, conflict status, live MCP tool shape');

@@ -1,4 +1,9 @@
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { promisify } from 'node:util';
 import type { ClauseAnalysis } from '@/lib/types';
+
+const execFileAsync = promisify(execFile);
 
 export type LegalCheckStatus = '근거 확인' | '추가 확인 필요' | '충돌 가능성 있음' | '근거 미확인';
 
@@ -37,7 +42,47 @@ export interface LawEvidenceRetriever {
 }
 
 export interface KoreanLawMcpToolClient {
-  callTool(name: 'law_search' | 'law_get_article' | string, args: Record<string, unknown>): Promise<unknown>;
+  callTool(name: 'law_search' | 'law_get_article' | 'search_law' | 'get_law_text' | string, args: Record<string, unknown>): Promise<unknown>;
+}
+
+export type KoreanLawCliToolClientOptions = {
+  apiKey?: string;
+  command?: string;
+  timeoutMs?: number;
+  maxBuffer?: number;
+};
+
+export class KoreanLawCliToolClient implements KoreanLawMcpToolClient {
+  private readonly apiKey?: string;
+  private readonly command: string;
+  private readonly timeoutMs: number;
+  private readonly maxBuffer: number;
+
+  constructor(options: KoreanLawCliToolClientOptions = {}) {
+    this.apiKey = options.apiKey || process.env.LAW_OC || process.env.KOREAN_LAW_API_KEY;
+    this.command = options.command || path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'korean-law.cmd' : 'korean-law');
+    this.timeoutMs = options.timeoutMs ?? 20_000;
+    this.maxBuffer = options.maxBuffer ?? 8 * 1024 * 1024;
+  }
+
+  async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    if (!this.apiKey) {
+      return { isError: true, error: 'missing-api-key', warnings: ['LAW_OC 또는 KOREAN_LAW_API_KEY 환경변수가 없어 Korean Law CLI를 호출하지 않았습니다.'] };
+    }
+    const cliName = name === 'law_search' ? 'search_law' : name === 'law_get_article' ? 'get_law_text' : name;
+    const normalizedArgs = normalizeCliArgs(cliName, args);
+    const jsonInput = JSON.stringify({ ...normalizedArgs, apiKey: this.apiKey });
+    try {
+      const { stdout, stderr } = await execFileAsync(this.command, [cliName, '--json-input', jsonInput], {
+        timeout: this.timeoutMs,
+        maxBuffer: this.maxBuffer,
+        encoding: 'utf8',
+      });
+      return parseCliOutput(stdout, stderr);
+    } catch (error) {
+      return { isError: true, error: messageOf(error), stdout: (error as { stdout?: string }).stdout, stderr: (error as { stderr?: string }).stderr };
+    }
+  }
 }
 
 export class KoreanLawMcpEvidenceRetriever implements LawEvidenceRetriever {
@@ -45,19 +90,49 @@ export class KoreanLawMcpEvidenceRetriever implements LawEvidenceRetriever {
 
   async searchEvidence(query: LegalEvidenceQuery): Promise<LawEvidence[]> {
     if (!this.client) return [];
-    const response = await this.client.callTool('law_search', {
+    const targets = inferLawTargets(query);
+    const evidence: LawEvidence[] = [];
+
+    for (const target of targets) {
+      const searchResponse = await this.client.callTool('search_law', { query: target.lawName, display: 5 });
+      const laws = normalizeLawSearchResponse(searchResponse);
+      const law = chooseBestLaw(laws, target.lawName);
+      if (!law) continue;
+
+      const articleNumber = target.articleNumber || inferArticleNumber(query, target.lawName);
+      if (!articleNumber) continue;
+
+      const articleResponse = await this.client.callTool('get_law_text', {
+        mst: law.mst,
+        lawId: law.lawId,
+        jo: articleNumber,
+      });
+      evidence.push(...normalizeEvidenceResponse(articleResponse, 'korean-law-mcp', { lawName: law.lawName || target.lawName, articleNumber }));
+    }
+
+    if (evidence.length) return uniqueEvidence(evidence);
+
+    const fallbackResponse = await this.client.callTool('law_search', {
       query: query.keywords.join(' '),
       article: query.article,
       text: query.text,
     });
-    return normalizeEvidenceResponse(response, 'korean-law-mcp');
+    return normalizeEvidenceResponse(fallbackResponse, 'korean-law-mcp');
   }
 
   async getArticle(lawName: string, articleNumber: string): Promise<LawEvidence | null> {
     if (!this.client) return null;
-    const response = await this.client.callTool('law_get_article', { lawName, articleNumber });
-    return normalizeEvidenceResponse(response, 'korean-law-mcp')[0] || null;
+    const searchResponse = await this.client.callTool('search_law', { query: lawName, display: 5 });
+    const law = chooseBestLaw(normalizeLawSearchResponse(searchResponse), lawName);
+    if (!law) return null;
+    const response = await this.client.callTool('get_law_text', { mst: law.mst, lawId: law.lawId, jo: articleNumber });
+    return normalizeEvidenceResponse(response, 'korean-law-mcp', { lawName: law.lawName || lawName, articleNumber })[0] || null;
   }
+}
+
+export function createConfiguredKoreanLawEvidenceRetriever(): LawEvidenceRetriever {
+  if (process.env.LAW_OC || process.env.KOREAN_LAW_API_KEY) return new KoreanLawMcpEvidenceRetriever(new KoreanLawCliToolClient());
+  return new MockLawEvidenceRetriever();
 }
 
 export class MockLawEvidenceRetriever implements LawEvidenceRetriever {
@@ -119,9 +194,114 @@ export async function checkLegalCompliance(input: {
   return { status, evidence, missingEvidence, warnings, checkedAt };
 }
 
-function normalizeEvidenceResponse(response: unknown, source: LawEvidenceSource): LawEvidence[] {
-  const items = Array.isArray(response) ? response : Array.isArray((response as { results?: unknown[] })?.results) ? (response as { results: unknown[] }).results : [];
-  return items.map((item, index) => sanitizeEvidence({ ...(item as Record<string, unknown>), source } as LawEvidence, `${source}-${index}`)).filter(Boolean) as LawEvidence[];
+type LawSearchHit = { lawName?: string; mst?: string; lawId?: string };
+
+type EvidenceDefaults = { lawName?: string; articleNumber?: string };
+
+function normalizeEvidenceResponse(response: unknown, source: LawEvidenceSource, defaults: EvidenceDefaults = {}): LawEvidence[] {
+  const rawItems = extractItems(response);
+  const items = rawItems.length ? rawItems : typeof response === 'string' ? [{ text: response }] : [];
+  return items.map((item, index) => normalizeEvidenceItem(item as Record<string, unknown>, source, defaults, `${source}-${index}`)).filter(Boolean) as LawEvidence[];
+}
+
+function normalizeEvidenceItem(item: Record<string, unknown>, source: LawEvidenceSource, defaults: EvidenceDefaults, fallbackId: string): LawEvidence | null {
+  const text = stringField(item, ['text', 'content', 'articleText', '조문내용', '본문', '내용']) || extractTextFromContent(item.content);
+  const lawName = stringField(item, ['lawName', '법령명', 'lawTitle']) || defaults.lawName || inferLawNameFromText(text);
+  const articleNumber = stringField(item, ['articleNumber', '조문번호', 'articleNo', 'jo']) || defaults.articleNumber || inferArticleFromText(text);
+  const articleTitle = stringField(item, ['articleTitle', '조문제목', 'title']);
+  const url = stringField(item, ['url', 'link', 'href']);
+  const citation = stringField(item, ['citation', '인용', 'cite']) || buildCitation(lawName, articleNumber, articleTitle, url);
+  return sanitizeEvidence({ ...(item as unknown as LawEvidence), source, lawName: lawName || '', articleNumber: articleNumber || '', articleTitle, text: text || '', citation, url }, fallbackId);
+}
+
+function normalizeLawSearchResponse(response: unknown): LawSearchHit[] {
+  return extractItems(response).map((item) => {
+    const record = item as Record<string, unknown>;
+    return {
+      lawName: stringField(record, ['lawName', '법령명한글', '법령명', 'name', 'title']),
+      mst: stringField(record, ['mst', 'MST', '법령일련번호']),
+      lawId: stringField(record, ['lawId', 'LAW_ID', '법령ID']),
+    };
+  }).filter((item) => item.lawName || item.mst || item.lawId);
+}
+
+function extractItems(response: unknown): unknown[] {
+  if (Array.isArray(response)) return response;
+  const record = response as Record<string, unknown> | undefined;
+  if (!record) return [];
+  if (Array.isArray(record.results)) return record.results;
+  if (Array.isArray(record.items)) return record.items;
+  if (Array.isArray(record.laws)) return record.laws;
+  if (Array.isArray(record.data)) return record.data;
+  if (Array.isArray((record.structuredContent as Record<string, unknown> | undefined)?.results)) return (record.structuredContent as { results: unknown[] }).results;
+  const contentText = extractTextFromContent(record.content);
+  if (contentText) return [{ text: contentText }];
+  if (typeof record.text === 'string' || typeof record.lawName === 'string' || typeof record['법령명'] === 'string') return [record];
+  return [];
+}
+
+function inferLawTargets(query: LegalEvidenceQuery): { lawName: string; articleNumber?: string }[] {
+  const text = `${query.article ?? ''} ${query.text ?? ''} ${query.keywords.join(' ')}`;
+  const targets = new Map<string, { lawName: string; articleNumber?: string }>();
+  for (const keyword of query.keywords) {
+    if (/법|령|규정/u.test(keyword) && !/위원회|심의|자료 제출|관련 상위규정|위임 근거/u.test(keyword)) targets.set(keyword, { lawName: keyword });
+  }
+  if (/사립학교법|기금운용심의회|외부\s*전문가/u.test(text)) targets.set('사립학교법', { lawName: '사립학교법', articleNumber: '제32조의3' });
+  return [...targets.values()];
+}
+
+function inferArticleNumber(query: LegalEvidenceQuery, lawName: string): string | undefined {
+  const text = `${query.article ?? ''} ${query.text ?? ''}`;
+  const explicit = text.match(/제\s*\d+\s*조(?:의\s*\d+)?/u)?.[0];
+  if (explicit) return explicit.replace(/\s+/g, '');
+  if (lawName === '사립학교법' && /기금운용심의회|외부\s*전문가/u.test(text)) return '제32조의3';
+  return undefined;
+}
+
+function chooseBestLaw(laws: LawSearchHit[], lawName: string): LawSearchHit | undefined {
+  const normalized = normalizeTerm(lawName);
+  return laws.find((law) => normalizeTerm(law.lawName || '') === normalized) || laws.find((law) => normalizeTerm(law.lawName || '').includes(normalized)) || laws[0];
+}
+
+function normalizeCliArgs(toolName: string, args: Record<string, unknown>) {
+  if (toolName === 'search_law') return { query: args.query, display: args.display ?? 5 };
+  if (toolName === 'get_law_text') return { mst: args.mst, lawId: args.lawId, jo: args.jo ?? args.articleNumber ?? args.article };
+  return args;
+}
+
+function parseCliOutput(stdout: string, stderr: string): unknown {
+  const text = stdout.trim();
+  if (!text) return { isError: true, stderr };
+  try { return JSON.parse(text); } catch { return { text, stderr }; }
+}
+
+function stringField(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number') return String(value);
+  }
+  return undefined;
+}
+
+function extractTextFromContent(content: unknown): string | undefined {
+  if (typeof content === 'string') return content.trim();
+  if (!Array.isArray(content)) return undefined;
+  return content.map((item) => typeof item?.text === 'string' ? item.text : '').filter(Boolean).join('\n').trim() || undefined;
+}
+
+function inferLawNameFromText(text?: string): string | undefined {
+  return text?.match(/([가-힣A-Za-z·]+법)\s*제\s*\d+\s*조/u)?.[1];
+}
+
+function inferArticleFromText(text?: string): string | undefined {
+  return text?.match(/제\s*\d+\s*조(?:의\s*\d+)?/u)?.[0]?.replace(/\s+/g, '');
+}
+
+function buildCitation(lawName?: string, articleNumber?: string, articleTitle?: string, url?: string): string {
+  const base = [lawName, articleNumber].filter(Boolean).join(' ');
+  if (!base) return '';
+  return `${base}${articleTitle ? `(${articleTitle})` : ''}${url ? ` · ${url}` : ''}`;
 }
 
 function sanitizeEvidence(item: LawEvidence, fallbackId: string): LawEvidence | null {
@@ -163,6 +343,10 @@ function hasConflictSignal(clauseText: string, evidenceText: string) {
   const evidence = normalizeTerm(evidenceText);
   return (/반환하지아니|반환불가|환불하지/.test(clause) && /반환하여야|반환해야|반환한다/.test(evidence)) ||
     (/허용하지아니|금지/.test(clause) && /허용할수있|허용한다/.test(evidence));
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function normalizeTerm(value: string) {

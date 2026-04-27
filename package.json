@@ -27,6 +27,7 @@
     "fast-xml-parser": "^5.7.2",
     "jszip": "^3.10.1",
     "kordoc": "^2.5.2",
+    "korean-law-mcp": "^3.5.4",
     "lucide-react": "latest",
     "next": "latest",
     "pdf-parse": "^2.4.5",

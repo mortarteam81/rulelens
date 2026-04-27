@@ -117,3 +117,11 @@ lib/mcp/gordon-client.ts
 4. UI에 URL 입력 추가
 5. parser warnings/confidence 표시
 6. 빌드 검증
+
+## Wave 3.9 Korean Law Evidence Integration
+
+- Korean Law evidence now targets the real Korean Law MCP/CLI tool names: `search_law` and `get_law_text`.
+- Runtime path: if `LAW_OC` or `KOREAN_LAW_API_KEY` is configured, RuleLens creates a `KoreanLawCliToolClient` and calls the project-local `korean-law` CLI. Without an API key, it falls back safely to empty mock evidence.
+- Evidence is still citation-gated: law results without law name, article number, text, and a generated/returned citation are discarded.
+- For the current fixture, `사립학교법` + 기금운용심의회/외부전문가 text infers `제32조의3` and attempts `search_law` → `get_law_text`.
+- UI/API status must continue to show `근거 미확인` or `추가 확인 필요` unless citation evidence is actually returned.
