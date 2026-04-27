@@ -1,4 +1,4 @@
-export type SourceKind = 'sungshin' | 'upload' | 'manual';
+export type SourceKind = 'sungshin' | 'upload' | 'manual' | 'hybrid';
 export type SourceFormat = 'html' | 'hwp' | 'hwpx' | 'pdf' | 'text' | 'unknown';
 
 export type ParsedComparisonRow = {
