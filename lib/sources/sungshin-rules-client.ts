@@ -1,25 +1,40 @@
 const SUNGSHIN_RULES_ORIGIN = 'https://rule.sungshin.ac.kr';
 
-export function isSungshinLawChangeListUrl(rawUrl: string): boolean {
+export function isSungshinRulesUrl(rawUrl: string): boolean {
   try {
-    const url = new URL(rawUrl);
-    return (
-      url.origin === SUNGSHIN_RULES_ORIGIN &&
-      url.pathname === '/service/law/lawChangeList.do' &&
-      Boolean(url.searchParams.get('seq')) &&
-      Boolean(url.searchParams.get('historySeq'))
-    );
+    return normalizeSungshinLawChangeListUrl(rawUrl) !== undefined;
   } catch {
     return false;
   }
 }
 
+export function normalizeSungshinLawChangeListUrl(rawUrl: string): string | undefined {
+  const url = new URL(rawUrl);
+  if (url.origin !== SUNGSHIN_RULES_ORIGIN) return undefined;
+
+  const supportedPaths = new Set([
+    '/service/law/lawChangeList.do',
+    '/service/law/lawFullScreen.do',
+    '/service/law/lawView.do',
+    '/service/law/lawTwoView.do',
+    '/service/law/lawFullScreenContent.do',
+  ]);
+  if (!supportedPaths.has(url.pathname)) return undefined;
+
+  const seq = url.searchParams.get('seq');
+  const historySeq = url.searchParams.get('historySeq');
+  if (!seq || !historySeq) return undefined;
+
+  return `${SUNGSHIN_RULES_ORIGIN}/service/law/lawChangeList.do?seq=${encodeURIComponent(seq)}&historySeq=${encodeURIComponent(historySeq)}`;
+}
+
 export async function fetchSungshinLawChangeListHtml(rawUrl: string): Promise<string> {
-  if (!isSungshinLawChangeListUrl(rawUrl)) {
-    throw new Error('성신 규정관리시스템 lawChangeList 공개 URL만 지원합니다.');
+  const normalizedUrl = normalizeSungshinLawChangeListUrl(rawUrl);
+  if (!normalizedUrl) {
+    throw new Error('성신 규정관리시스템 공개 규정 URL만 지원합니다. seq와 historySeq가 포함된 URL이 필요합니다.');
   }
 
-  const response = await fetch(rawUrl, {
+  const response = await fetch(normalizedUrl, {
     headers: {
       'user-agent': 'regdiff-dashboard/0.1 (+https://rule.sungshin.ac.kr public law parser)',
       accept: 'text/html,application/xhtml+xml',
