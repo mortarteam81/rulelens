@@ -150,10 +150,7 @@ export default function Home() {
                 <Summary result={result} />
                 <SourceOverview result={result} />
                 <ParserMeta result={result} />
-                <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-                  <ClauseList clauses={clauses} selected={selected} onSelect={setSelected} />
-                  {selected && <ClauseDetail clause={selected} mode={result.inputMode} />}
-                </div>
+                <PracticalReviewBoard result={result} clauses={clauses} selected={selected} onSelect={setSelected} />
               </>
             ) : <EmptyState />}
           </section>
@@ -225,7 +222,70 @@ function SourceCard({ source }: { source: SourceMeta }) {
 
 function ParserMeta({ result }: { result: ExtendedResult }) {
   const warnings = [...(result.parserWarnings || []), ...(result.hybridComparisonSummary?.warnings || [])];
-  return <div className="card p-4 text-sm text-gray-700"><b>파싱 정보</b> · {result.sourceFormat}{result.previousHistory && result.currentHistory ? ` · ${result.previousHistory} → ${result.currentHistory}` : ''}{warnings.length ? <ul className="mt-2 list-disc pl-5 text-amber-700">{warnings.map(w => <li key={w}>{w}</li>)}</ul> : null}</div>;
+  return <div className="card p-4 text-sm text-gray-700"><div className="flex flex-wrap items-center justify-between gap-2"><b>파싱 정보</b><span className="badge bg-slate-50 text-slate-700">{result.sourceFormat}{result.previousHistory && result.currentHistory ? ` · ${result.previousHistory} → ${result.currentHistory}` : ''}</span></div>{warnings.length ? <details className="mt-3 rounded-2xl bg-amber-50 p-3 text-amber-900"><summary className="cursor-pointer font-bold">파싱 참고사항 {warnings.length}건</summary><ul className="mt-2 list-disc pl-5 text-xs leading-6">{warnings.map(w => <li key={w}>{w}</li>)}</ul></details> : null}</div>;
+}
+
+type ClauseGroup = { title: string; subtitle: string; clauses: ClauseAnalysis[] };
+
+function PracticalReviewBoard({ result, clauses, selected, onSelect }: { result: ExtendedResult; clauses: ClauseAnalysis[]; selected: ClauseAnalysis | null; onSelect: (c: ClauseAnalysis) => void }) {
+  const groups = useMemo(() => buildClauseGroups(clauses), [clauses]);
+  return <div className="space-y-6"><ReviewBrief result={result} groups={groups} />{groups.map((group, index) => <AgendaGroup key={`${group.title}-${index}`} group={group} index={index} selected={selected} onSelect={onSelect} mode={result.inputMode} />)}{selected && <ClauseDetail clause={selected} mode={result.inputMode} />}</div>;
+}
+
+function ReviewBrief({ result, groups }: { result: ExtendedResult; groups: ClauseGroup[] }) {
+  const highRisk = result.clauses.filter(clause => clause.riskLevel === '높음' || clause.riskLevel === '매우 높음').length;
+  const lowConfidence = result.clauses.filter(clause => (clause.parserConfidence ?? 1) < 0.75).length;
+  return <div className="card overflow-hidden"><div className="border-b bg-slate-950 p-5 text-white"><p className="text-xs font-bold uppercase tracking-[0.25em] text-blue-200">Practical Review Brief</p><h2 className="mt-1 text-2xl font-black">실무 검토 요약</h2><p className="mt-2 text-sm text-slate-300">안건별로 변경내용, 비고, 검토의견을 한 화면에서 확인합니다.</p></div><div className="grid gap-3 p-4 md:grid-cols-4"><Metric label="안건" value={groups.length} tone="slate" /><Metric label="검토 row" value={result.clauses.length} tone="blue" /><Metric label="내용 고위험" value={highRisk} tone="red" /><Metric label="파서 확인필요" value={lowConfidence} tone="amber" /></div>{result.summary.topFindings?.length ? <div className="border-t p-4"><b className="text-sm">주요 확인 포인트</b><ul className="mt-2 grid gap-2 text-sm text-gray-700">{result.summary.topFindings.slice(0, 4).map(finding => <li key={finding} className="rounded-xl bg-gray-50 p-3">{finding}</li>)}</ul></div> : null}</div>;
+}
+
+function Metric({ label, value, tone }: { label: string; value: number; tone: 'slate' | 'blue' | 'red' | 'amber' }) {
+  const toneClass = tone === 'red' ? 'bg-red-50 text-red-700' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : tone === 'blue' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-700';
+  return <div className={`rounded-2xl p-4 ${toneClass}`}><div className="text-xs font-bold opacity-70">{label}</div><div className="mt-1 text-3xl font-black">{value}</div></div>;
+}
+
+function AgendaGroup({ group, index, selected, onSelect, mode }: { group: ClauseGroup; index: number; selected: ClauseAnalysis | null; onSelect: (c: ClauseAnalysis) => void; mode?: InputMode }) {
+  return <details open className="card overflow-hidden"><summary className="cursor-pointer border-b bg-white p-5"><div className="inline-flex w-full flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold text-blue-600">안건 {index + 1}</p><h3 className="text-xl font-black">{group.title}</h3><p className="mt-1 text-sm text-gray-600">{group.subtitle}</p></div><div className="flex gap-2 text-xs"><span className="badge bg-slate-50 text-slate-700">{group.clauses.length}개 row</span><span className="badge bg-red-50 text-red-700">고위험 {group.clauses.filter(c => c.riskLevel === '높음' || c.riskLevel === '매우 높음').length}</span></div></div></summary><div className="overflow-x-auto"><table className="w-full min-w-[980px] border-collapse text-left text-sm"><thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="w-[190px] p-3">조문/상태</th><th className="w-[24%] p-3">{mode === 'hybrid' ? '기준/현행 규정' : '현행'}</th><th className="w-[24%] p-3">{mode === 'hybrid' ? '제안 개정안' : '개정(안)'}</th><th className="p-3">비고 / 검토의견</th></tr></thead><tbody>{group.clauses.map(clause => <ReviewRow key={clause.id} clause={clause} selected={selected?.id === clause.id} onSelect={onSelect} />)}</tbody></table></div></details>;
+}
+
+function ReviewRow({ clause, selected, onSelect }: { clause: ClauseAnalysis; selected: boolean; onSelect: (c: ClauseAnalysis) => void }) {
+  return <tr onClick={() => onSelect(clause)} className={`cursor-pointer border-t align-top hover:bg-blue-50/60 ${selected ? 'bg-blue-50' : 'bg-white'}`}><td className="p-3"><b className="block text-slate-950">{clause.article}</b><div className="mt-2 flex flex-wrap gap-1"><span className={`badge ${riskClass(clause.riskLevel)}`}>{clause.riskLevel} {clause.riskScore}</span><span className="badge bg-white border text-slate-600">{clause.changeType}</span></div><div className="mt-2 text-xs text-slate-500">파서 신뢰도 {clause.parserConfidence !== undefined ? `${Math.round(clause.parserConfidence * 100)}%` : '미표시'}</div></td><td className="p-3"><ClampedText text={clause.oldText || '(없음)'} /></td><td className="p-3"><ClampedText text={clause.newText || '(없음)'} /></td><td className="p-3"><div className="rounded-xl bg-slate-50 p-3"><b className="text-xs text-slate-500">변경 요약</b><p className="mt-1 leading-6 text-slate-800">{clause.summary}</p></div><div className="mt-2 rounded-xl bg-amber-50 p-3 text-amber-950"><b className="text-xs">비고/사유</b><p className="mt-1 line-clamp-3 leading-6">{clause.reason}</p></div><div className="mt-2 rounded-xl bg-blue-50 p-3 text-blue-950"><b className="text-xs">검토의견 초안</b><p className="mt-1 line-clamp-4 leading-6">{clause.opinionDraft}</p></div></td></tr>;
+}
+
+function ClampedText({ text }: { text: string }) {
+  return <p className="max-h-48 overflow-auto whitespace-pre-wrap rounded-xl border bg-white p-3 text-xs leading-6 text-slate-700">{text}</p>;
+}
+
+function buildClauseGroups(clauses: ClauseAnalysis[]): ClauseGroup[] {
+  const groups: ClauseAnalysis[][] = [];
+  let current: ClauseAnalysis[] = [];
+  clauses.forEach(clause => {
+    current.push(clause);
+    if (/부\s*칙/.test(clause.article)) {
+      groups.push(current);
+      current = [];
+    }
+  });
+  if (current.length) groups.push(current);
+  return groups.map((items, index) => ({ title: inferAgendaTitle(items, index), subtitle: inferAgendaSubtitle(items), clauses: items }));
+}
+
+function inferAgendaTitle(clauses: ClauseAnalysis[], index: number): string {
+  const text = clauses.map(c => `${c.article} ${c.summary} ${c.reason}`).join(' ');
+  if (/교원업적평가|연구영역|필수업적|공동지도교수/.test(text)) return '교원업적평가 규정 개정(안)';
+  if (/기금운용심의회|외부전문가|사립학교법/.test(text)) return '기금운용심의회 규정 개정(안)';
+  if (/연구산학협력단|단장|2년 미만/.test(text)) return '연구산학협력단 정관 개정(안)';
+  return `안건 ${index + 1}`;
+}
+
+function inferAgendaSubtitle(clauses: ClauseAnalysis[]): string {
+  const high = clauses.filter(c => c.riskLevel === '높음' || c.riskLevel === '매우 높음').length;
+  return `조문/별표/부칙 ${clauses.length}개 · 내용 고위험 ${high}개 · 파서 평균 ${averageParserConfidence(clauses)}`;
+}
+
+function averageParserConfidence(clauses: ClauseAnalysis[]): string {
+  const values = clauses.map(c => c.parserConfidence).filter((v): v is number => typeof v === 'number');
+  if (!values.length) return '미표시';
+  return `${Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100)}%`;
 }
 
 function ClauseList({ clauses, selected, onSelect }: { clauses: ClauseAnalysis[]; selected: ClauseAnalysis | null; onSelect: (c: ClauseAnalysis) => void }) {
