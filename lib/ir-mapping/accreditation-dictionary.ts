@@ -1,0 +1,58 @@
+import type { AccreditationDictionaryEntry } from './types';
+
+export const accreditationDictionary: AccreditationDictionaryEntry[] = [
+  {
+    id: 'accreditation-4th-student-recruitment-retention',
+    name: '학생 충원 및 유지 관리',
+    cycle: '4주기 대학기관평가인증',
+    standardCode: '4C-STUDENT-RETENTION',
+    keywords: ['입학정원', '모집단위', '충원율', '유지충원', '중도탈락', '재학생', '정원조정', '편제'],
+    description: '학생 충원, 유지, 모집단위 운영, 정원관리와 관련된 평가인증 영향 영역입니다.',
+    weight: 18,
+  },
+  {
+    id: 'accreditation-4th-curriculum',
+    name: '교육과정 체계 및 운영',
+    cycle: '4주기 대학기관평가인증',
+    standardCode: '4C-CURRICULUM',
+    keywords: ['교육과정', '전공', '교양', '졸업요건', '학점', '이수', '복수전공', '부전공', '융합전공', '연계전공'],
+    description: '교육과정 편성·운영·개선과 관련된 평가인증 영향 영역입니다.',
+    weight: 15,
+  },
+  {
+    id: 'accreditation-4th-faculty',
+    name: '교원 확보 및 교원역량 관리',
+    cycle: '4주기 대학기관평가인증',
+    standardCode: '4C-FACULTY',
+    keywords: ['교원', '전임교원', '강사', '교원업적', '업적평가', '재임용', '연구업적', '공동지도교수', '초과강의'],
+    description: '교원 확보, 업적평가, 교육·연구 역량관리와 관련된 평가인증 영향 영역입니다.',
+    weight: 16,
+  },
+  {
+    id: 'accreditation-4th-student-support',
+    name: '학생지원체계',
+    cycle: '4주기 대학기관평가인증',
+    standardCode: '4C-STUDENT-SUPPORT',
+    keywords: ['학생지원', '장학', '상담', '복지', '진로', '취업', '장애학생', '권리'],
+    description: '학생지원, 장학, 상담, 진로·취업 지원과 관련된 평가인증 영향 영역입니다.',
+    weight: 13,
+  },
+  {
+    id: 'accreditation-4th-finance',
+    name: '재정운영 및 교육여건',
+    cycle: '4주기 대학기관평가인증',
+    standardCode: '4C-FINANCE',
+    keywords: ['재정', '예산', '결산', '기금', '교육비', '환원율', '등록금', '산학협력단', '간접비'],
+    description: '재정운영, 교육비 환원, 교육여건과 관련된 평가인증 영향 영역입니다.',
+    weight: 15,
+  },
+  {
+    id: 'accreditation-4th-governance-quality',
+    name: '대학운영·규정관리·성과환류',
+    cycle: '4주기 대학기관평가인증',
+    standardCode: '4C-GOVERNANCE-QA',
+    keywords: ['규정', '위원회', '심의', '승인', '성과관리', '평가', '환류', '개선', '권한', '책임', '자료 제출'],
+    description: '대학운영 체계, 규정관리, 성과관리 및 개선체계와 관련된 평가인증 영향 영역입니다.',
+    weight: 14,
+  },
+];

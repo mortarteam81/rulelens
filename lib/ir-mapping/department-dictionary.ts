@@ -1,0 +1,60 @@
+import type { DepartmentDictionaryEntry } from './types';
+
+export const departmentDictionary: DepartmentDictionaryEntry[] = [
+  {
+    id: 'planning-evaluation-team',
+    name: '기획평가팀',
+    role: 'IR·평가인증·대학정보공시·정원관리 총괄 검토',
+    keywords: ['입학정원', '정원조정', '편제', '대학정보공시', '평가인증', 'IR', '성과관리', '환류', '규정관리', '정책'],
+    description: 'IR, 평가인증, 공시, 학과 편제·정원관리와 관련된 규정 변경 검토 부서입니다.',
+    weight: 18,
+  },
+  {
+    id: 'academic-affairs',
+    name: '교무/학사지원 담당부서',
+    role: '학칙·학사·졸업·수업 운영 검토',
+    keywords: ['학칙', '학사', '수업', '성적', '졸업', '수료', '학위', '학점', '교육과정', '전공', '교양', '휴학', '복학', '자퇴'],
+    description: '학사운영과 교육과정 관련 규정 변경 검토 부서입니다.',
+    weight: 16,
+  },
+  {
+    id: 'faculty-affairs',
+    name: '교원인사 담당부서',
+    role: '교원 인사·업적평가·재임용 검토',
+    keywords: ['교원', '전임교원', '강사', '업적평가', '재임용', '승진', '연구업적', '초과강의', '공동지도교수'],
+    description: '교원 인사, 업적평가, 연구·교육 실적 관련 규정 변경 검토 부서입니다.',
+    weight: 16,
+  },
+  {
+    id: 'student-affairs',
+    name: '학생지원 담당부서',
+    role: '학생지원·장학·상담·복지 검토',
+    keywords: ['학생지원', '장학', '장학금', '상담', '복지', '진로', '취업', '학생권리', '징계'],
+    description: '학생지원, 장학, 상담, 복지 관련 규정 변경 검토 부서입니다.',
+    weight: 13,
+  },
+  {
+    id: 'budget-finance',
+    name: '예산/재무회계 담당부서',
+    role: '예산·결산·기금·재정 영향 검토',
+    keywords: ['예산', '결산', '재정', '회계', '기금', '등록금', '교육비', '환원율', '재무', '감사'],
+    description: '재정운영과 회계처리 관련 규정 변경 검토 부서입니다.',
+    weight: 14,
+  },
+  {
+    id: 'research-industry-cooperation',
+    name: '연구산학협력단',
+    role: '연구비·산학협력단·간접비 검토',
+    keywords: ['산학협력단', '연구비', '연구산학협력단', '간접비', '국책사업', '외부사업', '단장'],
+    description: '산학협력단, 연구비, 간접비, 외부사업 관련 규정 변경 검토 부서입니다.',
+    weight: 15,
+  },
+  {
+    id: 'legal-regulation-owner',
+    name: '규정 소관부서/법무 검토 담당',
+    role: '상위법령·위임근거·규정 체계 검토',
+    keywords: ['상위법령', '법령', '근거', '위임', '규정', '개정', '시행일', '부칙', '경과조치', '위원회', '심의'],
+    description: '상위법령, 위임근거, 부칙·경과조치 등 규정 체계 검토 담당입니다.',
+    weight: 12,
+  },
+];

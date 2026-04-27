@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeRegulation } from '@/lib/analyzer';
 import { buildHybridComparisonTable } from '@/lib/comparison/hybrid';
+import { enrichWithIrMappings } from '@/lib/ir-mapping/mapper';
 import { parseComparisonSource } from '@/lib/pipeline';
 import type { ParsedComparisonTable } from '@/lib/parsers/types';
 import type { SourceInput } from '@/lib/sources/types';
@@ -38,6 +39,17 @@ export async function POST(req:NextRequest){
       parserWarnings.push('업로드 개정안에서 분석 가능한 행을 찾지 못해 URL 기준 대비표를 분석 대상으로 사용했습니다.');
     }
 
+    if(!parsedTable?.rows.length&&process.env.RULELENS_ALLOW_SAMPLE_ROWS!=='true'){
+      return NextResponse.json({
+        error:'분석 가능한 조문 행을 찾지 못했습니다. 샘플 데이터 fallback은 운영 API에서 비활성화되어 있습니다.',
+        inputMode,
+        sourceFormat,
+        sourceMetadata,
+        hybridComparisonSummary,
+        parserWarnings,
+      },{status:422});
+    }
+
     const result=await analyzeRegulation({
       regulationName,
       purpose,
@@ -47,7 +59,8 @@ export async function POST(req:NextRequest){
       sourceMetadata,
       hybridComparisonSummary,
     });
-    return NextResponse.json(result);
+    const enrichedResult=enrichWithIrMappings(result);
+    return NextResponse.json(enrichedResult);
   }catch(error){
     const message=error instanceof Error?error.message:'분석 중 알 수 없는 오류가 발생했습니다.';
     return NextResponse.json({error:message},{status:400});
