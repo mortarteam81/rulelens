@@ -2,6 +2,8 @@ import type { ParsedComparisonTable } from '@/lib/parsers/types';
 import type { SourceInput } from '@/lib/sources/types';
 import { fetchSungshinLawChangeListHtml } from '@/lib/sources/sungshin-rules-client';
 import { parseSungshinLawChangeListHtml } from '@/lib/sources/sungshin-rule-parser';
+import { parseLegacyHwp } from '@/lib/parsers/hwp';
+import { parseHwpx } from '@/lib/parsers/hwpx';
 
 export async function parseSourceInput(input: SourceInput): Promise<ParsedComparisonTable> {
   if (input.kind === 'sungshin-url') {
@@ -10,12 +12,16 @@ export async function parseSourceInput(input: SourceInput): Promise<ParsedCompar
   }
 
   if (input.kind === 'upload') {
+    const sourceFormat = inferUploadFormat(input.fileName, input.mimeType);
+    if (sourceFormat === 'hwpx') return parseHwpx(input.bytes, input.fileName);
+    if (sourceFormat === 'hwp') return parseLegacyHwp(input.bytes, input.fileName);
+
     return {
       regulationName: stripExtension(input.fileName),
       sourceKind: 'upload',
-      sourceFormat: inferUploadFormat(input.fileName, input.mimeType),
+      sourceFormat,
       rows: [],
-      warnings: ['HWP/PDF 업로드 파서는 아직 placeholder boundary입니다. 실제 파일 파싱은 다음 패치에서 연결합니다.'],
+      warnings: ['PDF/unknown 업로드 파서는 아직 safe boundary입니다. HWPX는 JS ZIP/XML, Legacy HWP는 JS HWP5 text prototype 또는 hwp5txt/pyhwp 어댑터로 처리합니다.'],
     };
   }
 
@@ -42,10 +48,3 @@ function stripExtension(fileName: string): string {
 }
 
 export type { ParsedComparisonRow, ParsedComparisonTable, SourceFormat, SourceKind } from '@/lib/parsers/types';
-export {
-  normalizeComparisonRows,
-  normalizeComparisonTable,
-  normalizeHeaderLabel,
-  parseRawComparisonText,
-} from '@/lib/parsers/normalize';
-export type { NormalizeComparisonRowsOptions, NormalizeComparisonTableOptions, RawComparisonRow } from '@/lib/parsers/normalize';

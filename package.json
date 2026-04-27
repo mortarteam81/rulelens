@@ -4,20 +4,26 @@
         "build": "next build",
         "start": "next start",
         "lint": "next lint",
-        "test:sungshin": "node scripts/check-sungshin-fixtures.mjs"
+        "test:sungshin": "node scripts/check-sungshin-fixtures.mjs",
+        "test:uploads": "node scripts/check-upload-fixtures.mjs",
+        "test:normalizer": "node scripts/check-normalizer-fixtures.mjs",
+        "test:pdf-fixture": "node scripts/check-pdf-fixture.mjs"
     },
     "dependencies": {
         "@tailwindcss/postcss": "latest",
         "@types/node": "latest",
         "@types/react": "latest",
         "@types/react-dom": "latest",
+        "cfb": "^1.2.2",
+        "fast-xml-parser": "^5.7.2",
+        "jszip": "^3.10.1",
+        "lucide-react": "latest",
         "next": "latest",
+        "pdf-parse": "^2.4.5",
         "react": "latest",
         "react-dom": "latest",
         "tailwindcss": "latest",
         "typescript": "latest",
-        "lucide-react": "latest",
         "zod": "latest"
-    },
-    "devDependencies": {}
+    }
 }

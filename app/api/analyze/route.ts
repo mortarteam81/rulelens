@@ -3,6 +3,8 @@ import { analyzeRegulation } from '@/lib/analyzer';
 import { parseComparisonSource } from '@/lib/pipeline';
 import type { SourceInput } from '@/lib/sources/types';
 
+export const runtime = 'nodejs';
+
 export async function POST(req:NextRequest){
   try{
     const form=await req.formData();
