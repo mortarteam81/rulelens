@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rulelens.local/schemas/ir-analysis-result.schema.json",
+  "title": "RuleLens IR Analysis Result",
+  "type": "object",
+  "required": ["schemaVersion", "regulationName", "purpose", "sourceFormat", "summary", "irSummary", "clauses"],
+  "properties": {
+    "schemaVersion": { "const": "rulelens.ir-analysis.v1" },
+    "regulationName": { "type": "string" },
+    "purpose": { "type": "string" },
+    "sourceFormat": { "type": "string" },
+    "inputMode": { "type": "string", "enum": ["url-only", "file-only", "hybrid", "empty"] },
+    "sourceMetadata": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sourceMetadata" }
+    },
+    "hybridComparisonSummary": { "type": "object" },
+    "previousHistory": { "type": "string" },
+    "currentHistory": { "type": "string" },
+    "parserWarnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "summary": { "$ref": "#/$defs/rulelensSummary" },
+    "irSummary": { "$ref": "#/$defs/irSummary" },
+    "clauses": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/irClause" }
+    }
+  },
+  "$defs": {
+    "riskLevel": {
+      "type": "string",
+      "enum": ["낮음", "보통", "높음", "매우 높음"]
+    },
+    "sourceMetadata": {
+      "type": "object",
+      "properties": {
+        "role": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "type": "string" },
+        "format": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "rowCount": { "type": "number" },
+        "confidence": { "type": "number" },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "rulelensSummary": {
+      "type": "object",
+      "required": ["total", "changed", "created", "deleted", "highRisk", "topFindings"],
+      "properties": {
+        "total": { "type": "number" },
+        "changed": { "type": "number" },
+        "created": { "type": "number" },
+        "deleted": { "type": "number" },
+        "highRisk": { "type": "number" },
+        "topFindings": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "irSummary": {
+      "type": "object",
+      "required": ["mappedClauses", "highImpactClauses", "impactedIndicators", "impactedAccreditationStandards", "impactedDepartments", "topFollowUpActions"],
+      "properties": {
+        "mappedClauses": { "type": "number" },
+        "highImpactClauses": { "type": "number" },
+        "impactedIndicators": { "type": "array", "items": { "type": "string" } },
+        "impactedAccreditationStandards": { "type": "array", "items": { "type": "string" } },
+        "impactedDepartments": { "type": "array", "items": { "type": "string" } },
+        "topFollowUpActions": { "type": "array", "items": { "$ref": "#/$defs/followUpAction" } }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "required": ["mappingType", "targetId", "targetName", "relevanceScore", "relevanceLevel", "matchedKeywords", "mappingReason"],
+      "properties": {
+        "mappingType": { "type": "string", "enum": ["disclosure", "internal-ir", "accreditation", "department"] },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "source": { "type": "string" },
+        "cycle": { "type": "string" },
+        "standardCode": { "type": "string" },
+        "role": { "type": "string" },
+        "relevanceScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "relevanceLevel": { "$ref": "#/$defs/riskLevel" },
+        "matchedKeywords": { "type": "array", "items": { "type": "string" } },
+        "mappingReason": { "type": "string" }
+      }
+    },
+    "followUpAction": {
+      "type": "object",
+      "required": ["priority", "action", "reason"],
+      "properties": {
+        "priority": { "$ref": "#/$defs/riskLevel" },
+        "ownerDepartment": { "type": "string" },
+        "action": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "irClause": {
+      "type": "object",
+      "required": ["id", "article", "oldText", "newText", "changeType", "riskLevel", "riskScore", "summary", "impact", "questions", "opinionDraft", "lawKeywords", "irMappings", "accreditationMappings", "departmentMappings", "finalImpactScore", "finalImpactLevel", "followUpActions"],
+      "properties": {
+        "id": { "type": "string" },
+        "article": { "type": "string" },
+        "oldText": { "type": "string" },
+        "newText": { "type": "string" },
+        "reason": { "type": "string" },
+        "changeType": { "type": "string" },
+        "riskLevel": { "$ref": "#/$defs/riskLevel" },
+        "riskScore": { "type": "number" },
+        "summary": { "type": "string" },
+        "impact": { "type": "string" },
+        "questions": { "type": "array", "items": { "type": "string" } },
+        "opinionDraft": { "type": "string" },
+        "lawKeywords": { "type": "array", "items": { "type": "string" } },
+        "riskDrivers": { "type": "array", "items": { "type": "string" } },
+        "irMappings": { "type": "array", "items": { "$ref": "#/$defs/mapping" } },
+        "accreditationMappings": { "type": "array", "items": { "$ref": "#/$defs/mapping" } },
+        "departmentMappings": { "type": "array", "items": { "$ref": "#/$defs/mapping" } },
+        "finalImpactScore": { "type": "number", "minimum": 0, "maximum": 100 },
+        "finalImpactLevel": { "$ref": "#/$defs/riskLevel" },
+        "followUpActions": { "type": "array", "items": { "$ref": "#/$defs/followUpAction" } }
+      }
+    }
+  }
+}
