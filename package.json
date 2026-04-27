@@ -1,1 +1,23 @@
-{"scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"next lint"},"dependencies":{"@tailwindcss/postcss":"latest","@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","next":"latest","react":"latest","react-dom":"latest","tailwindcss":"latest","typescript":"latest","lucide-react":"latest","zod":"latest"},"devDependencies":{}}
+{
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "next lint",
+        "test:sungshin": "node scripts/check-sungshin-fixtures.mjs"
+    },
+    "dependencies": {
+        "@tailwindcss/postcss": "latest",
+        "@types/node": "latest",
+        "@types/react": "latest",
+        "@types/react-dom": "latest",
+        "next": "latest",
+        "react": "latest",
+        "react-dom": "latest",
+        "tailwindcss": "latest",
+        "typescript": "latest",
+        "lucide-react": "latest",
+        "zod": "latest"
+    },
+    "devDependencies": {}
+}

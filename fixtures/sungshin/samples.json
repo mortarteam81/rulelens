@@ -1,0 +1,37 @@
+[
+  {
+    "id": "undergraduate-rules-2026-03-01",
+    "name": "성신여자대학교 학칙",
+    "url": "https://rule.sungshin.ac.kr/service/law/lawFullScreen.do?seq=14&historySeq=1919&key=%25ED%2595%2599%25EC%25B9%2599",
+    "normalizedUrl": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=14&historySeq=1919",
+    "expected": { "regulationName": "성신여자대학교 학칙", "previousHistory": "2025-10-23", "currentHistory": "2026-03-01", "rowCount": 6 }
+  },
+  {
+    "id": "undergraduate-rules-2024-04-23",
+    "name": "성신여자대학교 학칙",
+    "url": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=14&historySeq=1679",
+    "normalizedUrl": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=14&historySeq=1679",
+    "expected": { "regulationName": "성신여자대학교 학칙", "previousHistory": "2024-03-01", "currentHistory": "2024-04-23", "rowCount": 4 }
+  },
+  {
+    "id": "graduate-rules-2025-10-23",
+    "name": "대학원 학칙",
+    "url": "https://rule.sungshin.ac.kr/service/law/lawFullScreen.do?seq=17&historySeq=1899&key=%25ED%2595%2599%25EC%25B9%2599",
+    "normalizedUrl": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=17&historySeq=1899",
+    "expected": { "regulationName": "대학원 학칙", "previousHistory": "2025-08-21", "currentHistory": "2025-10-23", "rowCount": 7 }
+  },
+  {
+    "id": "graduate-rules-2023-08-29",
+    "name": "대학원 학칙",
+    "url": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=17&historySeq=1589",
+    "normalizedUrl": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=17&historySeq=1589",
+    "expected": { "regulationName": "대학원 학칙", "previousHistory": "2023-03-01", "currentHistory": "2023-08-29", "rowCount": 2 }
+  },
+  {
+    "id": "academic-affairs-committee-2026-03-01",
+    "name": "교무위원회 규정",
+    "url": "https://rule.sungshin.ac.kr/service/law/lawTwoView.do?seq=168&historySeq=1956",
+    "normalizedUrl": "https://rule.sungshin.ac.kr/service/law/lawChangeList.do?seq=168&historySeq=1956",
+    "expected": { "regulationName": "교무위원회 규정", "previousHistory": "2025-03-01", "currentHistory": "2026-03-01", "rowCount": 2 }
+  }
+]
