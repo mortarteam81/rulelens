@@ -7,6 +7,7 @@
         "test:sungshin": "node scripts/check-sungshin-fixtures.mjs",
         "test:uploads": "node scripts/check-upload-fixtures.mjs",
         "test:normalizer": "node scripts/check-normalizer-fixtures.mjs",
+        "test:kordoc": "node scripts/check-kordoc-adapter.mjs",
         "test:pdf-fixture": "node scripts/check-pdf-fixture.mjs",
         "test:hybrid": "node scripts/check-hybrid-comparison.mjs",
         "test:hybrid-regression": "node scripts/check-hybrid-regression-fixtures.mjs"

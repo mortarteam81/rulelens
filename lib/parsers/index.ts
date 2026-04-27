@@ -5,6 +5,8 @@ import { fetchSungshinLawChangeListHtml } from '@/lib/sources/sungshin-rules-cli
 import { parseSungshinLawChangeListHtml } from '@/lib/sources/sungshin-rule-parser';
 import { parseLegacyHwp } from '@/lib/parsers/hwp';
 import { parseHwpx } from '@/lib/parsers/hwpx';
+export { KordocAdapter, compareDocumentsWithKordoc, detectKordoc, parseDocumentWithKordoc, parseTableWithKordoc } from '@/lib/parsers/kordoc-adapter';
+export type { KordocBoundaryOperation, KordocCommandRunner, KordocCompareDocumentsInput, KordocDetection, KordocDocumentInput, KordocParseDocumentResult } from '@/lib/parsers/kordoc-adapter';
 
 export async function parseSourceInput(input: SourceInput): Promise<ParsedComparisonTable> {
   if (input.kind === 'sungshin-url') {
